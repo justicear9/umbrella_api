@@ -6,7 +6,6 @@ use App\Models\ChatRoom;
 use App\Models\RoomMessage;
 use App\Models\RoomMessageMention;
 use App\Models\User;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -81,14 +80,24 @@ class NationalChatService
 
         $this->notifyConstituencyMentions($author, $message, $parsed['constituencies']);
 
-        $aiPayload = null;
+        // Return the user message immediately; Comrade AI replies after the HTTP response
+        // so the mobile send button does not hang on RAG.
         if ($parsed['has_comrade']) {
-            $aiPayload = $this->replyAsComrade($author, $message);
+            $authorId = (int) $author->id;
+            $messageId = (int) $message->id;
+            dispatch(function () use ($authorId, $messageId) {
+                $author = User::query()->find($authorId);
+                $userMessage = RoomMessage::query()->find($messageId);
+                if (! $author || ! $userMessage) {
+                    return;
+                }
+                app(self::class)->generateComradeReply($author, $userMessage);
+            })->afterResponse();
         }
 
         return [
             'message' => $this->serialize($message),
-            'ai_message' => $aiPayload,
+            'ai_message' => null,
         ];
     }
 
@@ -124,6 +133,11 @@ class NationalChatService
                 'message_id' => $message->id,
             ],
         ]);
+    }
+
+    public function generateComradeReply(User $author, RoomMessage $userMessage): ?array
+    {
+        return $this->replyAsComrade($author, $userMessage);
     }
 
     /**
