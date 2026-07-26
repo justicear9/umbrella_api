@@ -463,16 +463,21 @@ class AdminController extends Controller
             'action' => ['nullable', Rule::in(['draft', 'publish'])],
         ]);
 
+        [$mode, $rawTargets] = $this->normalizeAudienceInput(
+            $data['audience_mode'],
+            $data['target_ids'] ?? []
+        );
+
         $notice = Notice::create([
             'title' => $data['title'],
             'body' => $data['body'],
             'link_url' => $data['link_url'] ?? null,
             'priority' => $data['priority'],
-            'audience_mode' => $data['audience_mode'],
+            'audience_mode' => $mode,
             'status' => 'draft',
         ]);
 
-        $this->syncTargets($notice, $data['audience_mode'], $data['target_ids'] ?? []);
+        $this->syncTargets($notice, $mode, $rawTargets);
 
         if (($data['action'] ?? 'draft') === 'publish') {
             $result = $publisher->publish($notice->fresh('targets'));
@@ -533,6 +538,11 @@ class AdminController extends Controller
         $filename = (string) Str::uuid().'.'.$ext;
         $path = $file->storeAs('media', $filename);
 
+        [$mode, $rawTargets] = $this->normalizeAudienceInput(
+            $data['audience_mode'],
+            $data['target_ids'] ?? []
+        );
+
         $asset = MediaAsset::create([
             'title' => $data['title'],
             'description' => $data['description'] ?? null,
@@ -541,11 +551,11 @@ class AdminController extends Controller
             'file_path' => $path,
             'mime' => $file->getMimeType(),
             'byte_size' => $file->getSize() ?: 0,
-            'audience_mode' => $data['audience_mode'],
+            'audience_mode' => $mode,
             'status' => 'draft',
         ]);
 
-        $this->syncMediaTargets($asset, $data['audience_mode'], $data['target_ids'] ?? []);
+        $this->syncMediaTargets($asset, $mode, $rawTargets);
 
         if (($data['action'] ?? 'draft') === 'publish') {
             $result = $publisher->publish($asset->fresh('targets'));
@@ -609,6 +619,47 @@ class AdminController extends Controller
                 'target_id' => $pair['id'],
             ]);
         }
+    }
+
+    /**
+     * UI modes: all / national / constituency (+ optional constituency tags) / region (+ optional region tags).
+     * Constituency + tags becomes `constituencies`; blank stays `group_constituency`.
+     * Region + tags stays `regions`; blank `regions` means all communicators with a region.
+     *
+     * @param  list<string>  $rawTargets
+     * @return array{0: string, 1: list<string>}
+     */
+    private function normalizeAudienceInput(string $mode, array $rawTargets): array
+    {
+        $rawTargets = array_values(array_filter($rawTargets, static fn ($v) => is_string($v) && $v !== ''));
+
+        if (in_array($mode, ['all', 'group_national'], true)) {
+            return [$mode, []];
+        }
+
+        if ($mode === 'group_constituency' || $mode === 'constituencies') {
+            $constituencyTargets = array_values(array_filter(
+                $rawTargets,
+                static fn (string $raw) => str_starts_with($raw, 'c:')
+            ));
+
+            if ($constituencyTargets === []) {
+                return ['group_constituency', []];
+            }
+
+            return ['constituencies', $constituencyTargets];
+        }
+
+        if ($mode === 'regions') {
+            $regionTargets = array_values(array_filter(
+                $rawTargets,
+                static fn (string $raw) => str_starts_with($raw, 'r:')
+            ));
+
+            return ['regions', $regionTargets];
+        }
+
+        return ['all', []];
     }
 
     /**

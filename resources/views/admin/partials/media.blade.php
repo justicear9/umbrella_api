@@ -2,7 +2,7 @@
     <div class="stack">
         <div class="card">
             <h2>Upload media</h2>
-            <p class="card-lede">Documents, video, audio, photos (max 100 MB). Same audience targeting as Notices.</p>
+            <p class="card-lede">Documents, video, audio, photos (max 100 MB). Pick audience; optional target tags narrow Constituency or Region.</p>
             <form method="POST" action="{{ route('admin.media.store') }}" enctype="multipart/form-data">
                 @csrf
                 <label for="media-title">Title</label>
@@ -23,26 +23,7 @@
                     <option value="photo">Photo</option>
                 </select>
 
-                <label for="media-audience">Audience</label>
-                <select id="media-audience" name="audience_mode" required>
-                    <option value="all" @selected(old('audience_mode', 'all') === 'all')>All communicators</option>
-                    <option value="group_national" @selected(old('audience_mode') === 'group_national')>National Comms</option>
-                    <option value="group_constituency" @selected(old('audience_mode') === 'group_constituency')>Constituency Comms</option>
-                    <option value="regions" @selected(old('audience_mode') === 'regions')>Selected region(s)</option>
-                    <option value="constituencies" @selected(old('audience_mode') === 'constituencies')>Selected constituency(ies)</option>
-                </select>
-
-                <label for="media-targets">Targets</label>
-                <select id="media-targets" name="target_ids[]" multiple size="8">
-                    @foreach ($regions as $region)
-                        <optgroup label="{{ $region->name }}">
-                            <option value="r:{{ $region->id }}">Region: {{ $region->name }}</option>
-                            @foreach ($region->constituencies as $c)
-                                <option value="c:{{ $c->id }}">{{ $c->name }}</option>
-                            @endforeach
-                        </optgroup>
-                    @endforeach
-                </select>
+                @include('admin.partials.audience-targeting', ['prefix' => 'media', 'regions' => $regions])
 
                 <div class="row">
                     <button type="submit" name="action" value="draft">Upload draft</button>

@@ -2,7 +2,7 @@
     <div class="stack">
         <div class="card">
             <h2>Publish notice</h2>
-            <p class="card-lede">Broadcast or target by group, region, or constituency. Publish sends in-app + email + push.</p>
+            <p class="card-lede">Broadcast or target by group. Optional tags narrow Constituency or Region. Publish sends in-app + email + push.</p>
             <form method="POST" action="{{ route('admin.notices.store') }}">
                 @csrf
                 <label for="notice-title">Title</label>
@@ -20,27 +20,7 @@
                     <option value="urgent" @selected(old('priority') === 'urgent')>Urgent</option>
                 </select>
 
-                <label for="notice-audience">Audience</label>
-                <select id="notice-audience" name="audience_mode" required>
-                    <option value="all" @selected(old('audience_mode', 'all') === 'all')>All communicators</option>
-                    <option value="group_national" @selected(old('audience_mode') === 'group_national')>National Comms</option>
-                    <option value="group_constituency" @selected(old('audience_mode') === 'group_constituency')>Constituency Comms</option>
-                    <option value="regions" @selected(old('audience_mode') === 'regions')>Selected region(s)</option>
-                    <option value="constituencies" @selected(old('audience_mode') === 'constituencies')>Selected constituency(ies)</option>
-                </select>
-
-                <label for="notice-targets">Target IDs (regions or constituencies — hold Ctrl/Cmd for multi)</label>
-                <select id="notice-targets" name="target_ids[]" multiple size="8">
-                    @foreach ($regions as $region)
-                        <optgroup label="{{ $region->name }} (region #{{ $region->id }})">
-                            <option value="r:{{ $region->id }}">Region: {{ $region->name }}</option>
-                            @foreach ($region->constituencies as $c)
-                                <option value="c:{{ $c->id }}">{{ $c->name }}</option>
-                            @endforeach
-                        </optgroup>
-                    @endforeach
-                </select>
-                <p class="muted">For region audience, pick “Region: …” options. For constituency audience, pick constituency rows.</p>
+                @include('admin.partials.audience-targeting', ['prefix' => 'notice', 'regions' => $regions])
 
                 <div class="row">
                     <button type="submit" name="action" value="draft">Save draft</button>

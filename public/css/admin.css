@@ -672,6 +672,135 @@ th {
   margin-bottom: 0.35rem;
 }
 
+.audience-picker {
+  margin-bottom: 0.35rem;
+}
+
+.audience-targets {
+  margin-bottom: 0.85rem;
+}
+
+.audience-targets[hidden] {
+  display: none !important;
+}
+
+.tag-field {
+  position: relative;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.35rem;
+  min-height: 2.75rem;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.tag-chips:empty {
+  display: none;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.2rem 0.45rem 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 550;
+  line-height: 1.3;
+}
+
+.tag-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-chip button {
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.tag-chip button:hover {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+
+.tag-search {
+  width: 100%;
+  border: 0 !important;
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 0.35rem 0.25rem !important;
+  box-shadow: none !important;
+}
+
+.tag-search:focus {
+  outline: none;
+}
+
+.tag-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  z-index: 20;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.tag-suggestions[hidden] {
+  display: none !important;
+}
+
+.tag-suggestion {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+.tag-suggestion:hover,
+.tag-suggestion.is-active {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--text);
+}
+
+.tag-suggestion small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.75rem;
+  margin-top: 0.1rem;
+}
+
 @media (max-width: 900px) {
   .stats {
     grid-template-columns: 1fr 1fr;

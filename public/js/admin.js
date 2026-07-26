@@ -86,6 +86,247 @@
     if (overlay) overlay.classList.remove("is-open");
   }
 
+  function parseJsonAttr(el, name, fallback) {
+    try {
+      const raw = el.getAttribute(name);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function initAudiencePicker(root) {
+    const modeSelect = root.querySelector("[data-audience-mode]");
+    const targetsWrap = root.querySelector("[data-audience-targets]");
+    const chipsEl = root.querySelector("[data-tag-chips]");
+    const searchEl = root.querySelector("[data-tag-search]");
+    const suggestionsEl = root.querySelector("[data-tag-suggestions]");
+    const inputsEl = root.querySelector("[data-tag-inputs]");
+    const hintEl = root.querySelector("[data-tag-hint]");
+    if (!modeSelect || !targetsWrap || !chipsEl || !searchEl || !suggestionsEl || !inputsEl) {
+      return;
+    }
+
+    const geo = parseJsonAttr(root, "data-geo", []);
+    const selected = new Map();
+    let activeIndex = -1;
+
+    function currentKind() {
+      const mode = modeSelect.value;
+      if (mode === "group_constituency") return "constituency";
+      if (mode === "regions") return "region";
+      return null;
+    }
+
+    function optionList() {
+      const kind = currentKind();
+      if (kind === "region") {
+        return geo.map((r) => ({
+          value: `r:${r.id}`,
+          label: r.name,
+          meta: "Region",
+        }));
+      }
+      if (kind === "constituency") {
+        const rows = [];
+        geo.forEach((r) => {
+          (r.constituencies || []).forEach((c) => {
+            rows.push({
+              value: `c:${c.id}`,
+              label: c.name,
+              meta: r.name,
+            });
+          });
+        });
+        return rows;
+      }
+      return [];
+    }
+
+    function syncHiddenInputs() {
+      inputsEl.innerHTML = "";
+      selected.forEach((item) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "target_ids[]";
+        input.value = item.value;
+        inputsEl.appendChild(input);
+      });
+    }
+
+    function renderChips() {
+      chipsEl.innerHTML = "";
+      selected.forEach((item) => {
+        const chip = document.createElement("span");
+        chip.className = "tag-chip";
+        const label = document.createElement("span");
+        label.textContent = item.label;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.setAttribute("aria-label", `Remove ${item.label}`);
+        remove.textContent = "×";
+        remove.addEventListener("click", () => {
+          selected.delete(item.value);
+          renderChips();
+          syncHiddenInputs();
+          renderSuggestions();
+        });
+        chip.appendChild(label);
+        chip.appendChild(remove);
+        chipsEl.appendChild(chip);
+      });
+      syncHiddenInputs();
+    }
+
+    function updateVisibility() {
+      const kind = currentKind();
+      if (!kind) {
+        targetsWrap.hidden = true;
+        selected.clear();
+        renderChips();
+        suggestionsEl.hidden = true;
+        searchEl.value = "";
+        return;
+      }
+      targetsWrap.hidden = false;
+      if (hintEl) {
+        hintEl.textContent =
+          kind === "region"
+            ? "Leave blank to reach all communicators with a region. Add region tags to narrow."
+            : "Leave blank to reach all Constituency Comms. Add constituency tags to narrow.";
+      }
+      searchEl.placeholder =
+        kind === "region" ? "Search regions…" : "Search constituencies…";
+      // Drop tags that no longer match the active kind
+      Array.from(selected.keys()).forEach((value) => {
+        const ok =
+          (kind === "region" && value.startsWith("r:")) ||
+          (kind === "constituency" && value.startsWith("c:"));
+        if (!ok) selected.delete(value);
+      });
+      renderChips();
+      renderSuggestions();
+    }
+
+    function filteredOptions() {
+      const q = searchEl.value.trim().toLowerCase();
+      return optionList()
+        .filter((opt) => !selected.has(opt.value))
+        .filter((opt) => {
+          if (!q) return true;
+          return (
+            opt.label.toLowerCase().includes(q) ||
+            (opt.meta || "").toLowerCase().includes(q)
+          );
+        })
+        .slice(0, 12);
+    }
+
+    function renderSuggestions() {
+      if (targetsWrap.hidden) {
+        suggestionsEl.hidden = true;
+        return;
+      }
+      const rows = filteredOptions();
+      if (!rows.length || (!searchEl.value.trim() && document.activeElement !== searchEl)) {
+        suggestionsEl.hidden = true;
+        suggestionsEl.innerHTML = "";
+        activeIndex = -1;
+        return;
+      }
+      suggestionsEl.innerHTML = "";
+      rows.forEach((opt, index) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tag-suggestion" + (index === activeIndex ? " is-active" : "");
+        btn.setAttribute("role", "option");
+        btn.innerHTML = `${escapeHtml(opt.label)}<small>${escapeHtml(opt.meta || "")}</small>`;
+        btn.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          addTag(opt);
+        });
+        suggestionsEl.appendChild(btn);
+      });
+      suggestionsEl.hidden = false;
+    }
+
+    function addTag(opt) {
+      if (!opt || selected.has(opt.value)) return;
+      selected.set(opt.value, opt);
+      searchEl.value = "";
+      activeIndex = -1;
+      renderChips();
+      renderSuggestions();
+      searchEl.focus();
+    }
+
+    function seedFromOld() {
+      const oldTargets = parseJsonAttr(root, "data-old-targets", []);
+      const catalog = optionList();
+      const byValue = new Map(catalog.map((o) => [o.value, o]));
+      oldTargets.forEach((value) => {
+        const hit = byValue.get(value);
+        if (hit) selected.set(hit.value, hit);
+      });
+      renderChips();
+    }
+
+    modeSelect.addEventListener("change", updateVisibility);
+    searchEl.addEventListener("focus", () => {
+      activeIndex = -1;
+      renderSuggestions();
+    });
+    searchEl.addEventListener("input", () => {
+      activeIndex = -1;
+      renderSuggestions();
+    });
+    searchEl.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        suggestionsEl.hidden = true;
+      }, 120);
+    });
+    searchEl.addEventListener("keydown", (e) => {
+      const rows = filteredOptions();
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!rows.length) return;
+        activeIndex = (activeIndex + 1) % rows.length;
+        renderSuggestions();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!rows.length) return;
+        activeIndex = activeIndex <= 0 ? rows.length - 1 : activeIndex - 1;
+        renderSuggestions();
+      } else if (e.key === "Enter") {
+        if (activeIndex >= 0 && rows[activeIndex]) {
+          e.preventDefault();
+          addTag(rows[activeIndex]);
+        } else if (rows.length === 1 && searchEl.value.trim()) {
+          e.preventDefault();
+          addTag(rows[0]);
+        }
+      } else if (e.key === "Backspace" && !searchEl.value && selected.size) {
+        const keys = Array.from(selected.keys());
+        selected.delete(keys[keys.length - 1]);
+        renderChips();
+        renderSuggestions();
+      } else if (e.key === "Escape") {
+        suggestionsEl.hidden = true;
+      }
+    });
+
+    updateVisibility();
+    seedFromOld();
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     const saved = localStorage.getItem("ndc-admin-theme");
     applyTheme(saved === "dark" ? "dark" : "light");
@@ -129,6 +370,10 @@
           submit.textContent = "Working…";
         }
       });
+    });
+
+    document.querySelectorAll("[data-audience-picker]").forEach((root) => {
+      initAudiencePicker(root);
     });
 
     const modal = document.getElementById("transcript-modal");
@@ -203,14 +448,6 @@
           body.innerHTML = `<p class="muted">${escapeHtml(err.message || "Failed to load")}</p>`;
         }
       }
-    }
-
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
     }
 
     document.querySelectorAll(".score-row[data-session-id]").forEach((row) => {

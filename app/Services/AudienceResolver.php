@@ -39,10 +39,12 @@ class AudienceResolver
                 $query->where('comms_level', 'constituency');
                 break;
             case self::MODE_REGIONS:
+                // Empty targets = every communicator assigned to any region.
                 if ($ids === []) {
-                    return collect();
+                    $query->whereNotNull('region_id');
+                } else {
+                    $query->whereIn('region_id', $ids);
                 }
-                $query->whereIn('region_id', $ids);
                 break;
             case self::MODE_CONSTITUENCIES:
                 if ($ids === []) {
@@ -69,7 +71,7 @@ class AudienceResolver
             self::MODE_ALL => true,
             self::MODE_GROUP_NATIONAL => $user->comms_level === 'national',
             self::MODE_GROUP_CONSTITUENCY => $user->comms_level === 'constituency',
-            self::MODE_REGIONS => $user->region_id !== null && in_array((int) $user->region_id, $ids, true),
+            self::MODE_REGIONS => $user->region_id !== null && ($ids === [] || in_array((int) $user->region_id, $ids, true)),
             self::MODE_CONSTITUENCIES => $user->constituency_id !== null && in_array((int) $user->constituency_id, $ids, true),
             default => false,
         };
@@ -87,7 +89,9 @@ class AudienceResolver
             self::MODE_ALL => $query,
             self::MODE_GROUP_NATIONAL => $query->where('comms_level', 'national'),
             self::MODE_GROUP_CONSTITUENCY => $query->where('comms_level', 'constituency'),
-            self::MODE_REGIONS => $ids === [] ? $query->whereRaw('1=0') : $query->whereIn('region_id', $ids),
+            self::MODE_REGIONS => $ids === []
+                ? $query->whereNotNull('region_id')
+                : $query->whereIn('region_id', $ids),
             self::MODE_CONSTITUENCIES => $ids === [] ? $query->whereRaw('1=0') : $query->whereIn('constituency_id', $ids),
             default => $query->whereRaw('1=0'),
         };
