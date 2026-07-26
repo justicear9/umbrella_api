@@ -1,7 +1,7 @@
 <x-mail::message>
 # Hello {{ $user->name }}
 
-New media is available in the NDC Communicators app.
+New media is available in Comrade AI.
 
 **{{ $asset->title }}**  
 Type: {{ strtoupper($asset->kind) }}

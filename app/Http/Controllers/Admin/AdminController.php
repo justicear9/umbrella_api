@@ -320,7 +320,7 @@ class AdminController extends Controller
     {
         $p = $this->transcriptPayload($session);
         $lines = [];
-        $lines[] = 'NDC Communicators — Press Prep transcript';
+        $lines[] = 'Comrade AI — Press Prep transcript';
         $lines[] = 'Session #'.$p['id'];
         $lines[] = 'Communicator: '.($p['user']['name'] ?? '-').' ('.($p['user']['party_id'] ?? '-').')';
         $lines[] = 'Outing: '.$p['outing_type'].' · '.$p['difficulty'].' · '.$p['interview_mode'];

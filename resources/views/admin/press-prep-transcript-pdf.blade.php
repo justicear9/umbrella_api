@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h1>NDC Communicators — Press Prep transcript</h1>
+    <h1>Comrade AI — Press Prep transcript</h1>
     <div class="meta">
         Session #{{ $payload['id'] }} ·
         {{ $payload['user']['name'] ?? '-' }} ({{ $payload['user']['party_id'] ?? '-' }}) ·

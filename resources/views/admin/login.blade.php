@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NDC Comms Admin - Login</title>
+    <title>Comrade AI Admin - Login</title>
     <script>
         (function () {
             try {
@@ -20,8 +20,8 @@
 <div class="login-page">
     <form class="login-card" method="POST" action="{{ route('admin.login.submit') }}">
         @csrf
-        <h1>NDC Communicators</h1>
-        <p class="lede">Admin access for document digests and Press Prep.</p>
+        <h1>Comrade AI</h1>
+        <p class="lede">Admin access for NDC Communicators digests and Press Prep.</p>
         @error('admin_key')
             <div class="field-error">{{ $message }}</div>
         @enderror

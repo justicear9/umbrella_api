@@ -22,7 +22,7 @@ class PressPrepAssignedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Press Prep assigned — NDC Communicators',
+            subject: 'Press Prep assigned — Comrade AI',
         );
     }
 

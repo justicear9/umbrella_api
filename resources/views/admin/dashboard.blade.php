@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'NDC Comms Admin')
+@section('title', 'Comrade AI Admin')
 
 @section('content')
     @include('admin.partials.overview')

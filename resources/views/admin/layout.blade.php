@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'NDC Comms Admin')</title>
+    <title>@yield('title', 'Comrade AI Admin')</title>
     <script>
         (function () {
             try {
@@ -24,7 +24,7 @@
         <div class="sidebar-brand">
             <div class="sidebar-brand-mark" aria-hidden="true">NDC</div>
             <div>
-                <strong>NDC Comms</strong>
+                <strong>Comrade AI</strong>
                 <span>Admin</span>
             </div>
         </div>
@@ -56,7 +56,7 @@
             <div class="content-header">
                 <div>
                     <h1 id="section-title">Overview</h1>
-                    <p class="muted">NDC Communicators operations</p>
+                    <p class="muted">Comrade AI · NDC Communicators operations</p>
                 </div>
             </div>
 

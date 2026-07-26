@@ -1,7 +1,7 @@
 <x-mail::message>
 # Hello {{ $user->name }}
 
-A new notice was published for NDC Communicators.
+A new notice was published in Comrade AI.
 
 **{{ $notice->title }}**
 
@@ -13,7 +13,7 @@ Open link
 </x-mail::button>
 @endif
 
-Open the NDC Communicators app → **Notices** to read it.
+Open **Comrade AI** → **Notices** to read it.
 
 Thanks,<br>
 {{ config('app.name') }}

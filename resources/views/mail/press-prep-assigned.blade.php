@@ -1,6 +1,6 @@
 Hello {{ $name }},
 
-You have been assigned a Press Prep session in NDC Communicators.
+You have been assigned a Press Prep session in Comrade AI.
 
 Outing: {{ $outing }}
 Difficulty: {{ $difficulty }}
@@ -11,6 +11,6 @@ Topics: {{ $topics }}
 Note: {{ $note }}
 @endif
 
-Open the NDC Comms app, then go to Press Prep to review the locked setup and start the interview.
+Open **Comrade AI**, then go to Press Prep to review the locked setup and start the interview.
 
-— NDC Communicators
+— Comrade AI
