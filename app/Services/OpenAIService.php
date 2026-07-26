@@ -69,6 +69,128 @@ class OpenAIService
     }
 
     /**
+     * Responses API with hosted web_search (domain-filtered when the model supports it).
+     *
+     * @param  list<string>  $allowedDomains
+     * @return array{answer: string, sources: list<array{title: string, url: string, excerpt: string}>}
+     */
+    public function responsesWithWebSearch(string $input, array $allowedDomains = [], array $options = []): array
+    {
+        if ($this->apiKey === '') {
+            throw new RuntimeException('OPENAI_API_KEY is not configured.');
+        }
+
+        $model = (string) ($options['model'] ?? config('services.openai.web_search_model', 'gpt-4o'));
+        $domains = array_values(array_unique(array_filter(array_map(
+            static fn ($d) => strtolower(trim((string) $d)),
+            $allowedDomains
+        ))));
+
+        $tool = ['type' => 'web_search'];
+        if ($domains !== []) {
+            $tool['filters'] = ['allowed_domains' => $domains];
+        }
+
+        $payload = [
+            'model' => $model,
+            'tools' => [$tool],
+            'tool_choice' => $options['tool_choice'] ?? 'auto',
+            'include' => ['web_search_call.action.sources'],
+            'temperature' => $options['temperature'] ?? 0.2,
+            'input' => $input,
+        ];
+
+        $response = Http::withToken($this->apiKey)
+            ->timeout(180)
+            ->post('https://api.openai.com/v1/responses', $payload);
+
+        if (! $response->successful()) {
+            Log::error('OpenAI responses web_search failed', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            throw new RuntimeException('OpenAI web search request failed: '.$response->status());
+        }
+
+        $json = $response->json();
+        $answer = '';
+        $sources = [];
+        $seen = [];
+
+        foreach ($json['output'] ?? [] as $item) {
+            if (($item['type'] ?? '') === 'message') {
+                foreach ($item['content'] ?? [] as $block) {
+                    if (($block['type'] ?? '') === 'output_text') {
+                        $answer .= (string) ($block['text'] ?? '');
+                        foreach ($block['annotations'] ?? [] as $ann) {
+                            if (($ann['type'] ?? '') !== 'url_citation') {
+                                continue;
+                            }
+                            $url = trim((string) ($ann['url'] ?? ''));
+                            if ($url === '' || isset($seen[$url])) {
+                                continue;
+                            }
+                            if ($domains !== [] && ! $this->urlMatchesAllowedDomains($url, $domains)) {
+                                continue;
+                            }
+                            $seen[$url] = true;
+                            $sources[] = [
+                                'title' => trim((string) ($ann['title'] ?? '')) ?: $url,
+                                'url' => $url,
+                                'excerpt' => '',
+                            ];
+                        }
+                    }
+                }
+            }
+
+            if (($item['type'] ?? '') === 'web_search_call') {
+                foreach ($item['action']['sources'] ?? [] as $src) {
+                    $url = trim((string) ($src['url'] ?? ''));
+                    if ($url === '' || isset($seen[$url])) {
+                        continue;
+                    }
+                    if ($domains !== [] && ! $this->urlMatchesAllowedDomains($url, $domains)) {
+                        continue;
+                    }
+                    $seen[$url] = true;
+                    $sources[] = [
+                        'title' => $url,
+                        'url' => $url,
+                        'excerpt' => '',
+                    ];
+                }
+            }
+        }
+
+        return [
+            'answer' => trim($answer),
+            'sources' => array_slice($sources, 0, 8),
+        ];
+    }
+
+    /**
+     * @param  list<string>  $allowedDomains
+     */
+    private function urlMatchesAllowedDomains(string $url, array $allowedDomains): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($host === '') {
+            return false;
+        }
+        $host = preg_replace('/^www\./', '', $host) ?? $host;
+
+        foreach ($allowedDomains as $domain) {
+            $domain = preg_replace('/^www\./', '', $domain) ?? $domain;
+            if ($host === $domain || str_ends_with($host, '.'.$domain)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param  list<string>  $texts
      * @return list<list<float>>
      */

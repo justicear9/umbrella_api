@@ -38,10 +38,48 @@ return [
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'web_search_model' => env('OPENAI_WEB_SEARCH_MODEL', 'gpt-4o'),
         'embedding_model' => env('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
         'tts_model' => env('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'),
         'temperature' => (float) env('OPENAI_TEMPERATURE', 0.3),
         'max_tokens' => (int) env('OPENAI_MAX_TOKENS', 2000),
+    ],
+
+    /*
+    | National Chat @comrade live web verification (not used by Ask).
+    | Domains must omit scheme; OpenAI web_search allowed_domains includes subdomains.
+    */
+    'chat_web_verify' => [
+        'enabled' => filter_var(env('CHAT_WEB_VERIFY_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'allowed_domains' => [
+            // JoyNews
+            'myjoyonline.com',
+            'joyonline.com',
+            // CitiFM / Citi Newsroom
+            'citinewsroom.com',
+            // GTV / GBC
+            'gbcghanaonline.com',
+            'gtvghana.com',
+            // TV3 / 3News (+ Three FM Media General family coverage)
+            '3news.com',
+            // International
+            'bbc.com',
+            'bbc.co.uk',
+            'cnn.com',
+            'dw.com',
+        ],
+        'outlet_labels' => [
+            'myjoyonline.com' => 'JoyNews',
+            'joyonline.com' => 'JoyNews',
+            'citinewsroom.com' => 'CitiFM',
+            'gbcghanaonline.com' => 'GBC',
+            'gtvghana.com' => 'GTV',
+            '3news.com' => 'TV3',
+            'bbc.com' => 'BBC',
+            'bbc.co.uk' => 'BBC',
+            'cnn.com' => 'CNN',
+            'dw.com' => 'DW',
+        ],
     ],
 
     'gemini' => [

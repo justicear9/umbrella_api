@@ -14,6 +14,7 @@ class NationalChatService
     public function __construct(
         private RoomMentionParser $mentions,
         private RagService $rag,
+        private ChatWebVerifyService $webVerify,
         private ExpoPushService $push,
     ) {}
 
@@ -152,23 +153,38 @@ class NationalChatService
 
         $roomContext = $this->recentRoomTranscript($userMessage, 20);
         $prompt = $this->buildComradePrompt($author, $question, $roomContext);
+        $asker = $this->firstName($author->name);
 
         $citations = [];
         $footnotes = [];
+        $digestAnswer = '';
+        $webAnswer = '';
+        $webFootnotes = [];
 
         try {
             // RagService returns `response` (same shape as Ask / Briefing).
             $result = $this->rag->answer($prompt, []);
-            $answer = trim((string) ($result['response'] ?? ''));
+            $digestAnswer = trim((string) ($result['response'] ?? ''));
             $citations = is_array($result['citations'] ?? null) ? $result['citations'] : [];
             $footnotes = is_array($result['footnotes'] ?? null) ? $result['footnotes'] : [];
-            if ($answer === '') {
-                $answer = 'I could not form a reply from the digested sources just now. Try asking again with a bit more detail.';
-            }
         } catch (\Throwable $e) {
-            Log::warning('National chat @comrade failed', ['error' => $e->getMessage()]);
-            $answer = 'I hit a snag pulling sources just now. Please try @comrade again in a moment.';
+            Log::warning('National chat @comrade digest failed', ['error' => $e->getMessage()]);
         }
+
+        try {
+            $web = $this->webVerify->verify($asker, $question, $roomContext);
+            $webAnswer = trim((string) ($web['answer'] ?? ''));
+            $webFootnotes = is_array($web['footnotes'] ?? null) ? $web['footnotes'] : [];
+        } catch (\Throwable $e) {
+            Log::warning('National chat @comrade web verify failed', ['error' => $e->getMessage()]);
+        }
+
+        $answer = $this->mergeComradeAnswers($question, $digestAnswer, $webAnswer, $webFootnotes !== []);
+        if ($answer === '') {
+            $answer = 'I could not form a reply from digested sources or live news just now. Try asking again with a bit more detail.';
+        }
+
+        $footnotes = array_values(array_merge($footnotes, $webFootnotes));
 
         $ai = RoomMessage::create([
             'chat_room_id' => $userMessage->chat_room_id,
@@ -260,6 +276,45 @@ PROMPT;
     }
 
     /**
+     * Combine digest briefing with live news verification into one room reply.
+     */
+    private function mergeComradeAnswers(string $question, string $digest, string $web, bool $hasWebSources): string
+    {
+        $digest = trim($digest);
+        $web = trim($web);
+
+        if ($digest === '' && $web === '') {
+            return '';
+        }
+        if ($digest === '') {
+            return $web;
+        }
+        if ($web === '') {
+            return $digest;
+        }
+
+        $verifyAsk = (bool) preg_match(
+            '/\b(verify|verif(?:y|ication)?|fact[- ]?check|confirm|is that true|true or false|claim|rumour|rumor|check (?:that|this|it))\b/i',
+            $question
+        );
+
+        if ($verifyAsk && $hasWebSources) {
+            return $web."\n\n---\n**From digested briefings**\n\n".$digest;
+        }
+
+        if ($hasWebSources) {
+            return $digest."\n\n---\n**Live news check**\n\n".$web;
+        }
+
+        similar_text(mb_strtolower($digest), mb_strtolower($web), $pct);
+        if ($pct > 70) {
+            return $digest;
+        }
+
+        return $digest."\n\n".$web;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function serialize(RoomMessage $message): array
@@ -291,7 +346,20 @@ PROMPT;
                 ? array_values($message->citations ?? [])
                 : [],
             'footnotes' => $message->kind === RoomMessage::KIND_AI
-                ? array_values($message->footnotes ?? [])
+                ? array_values(array_map(function ($fn) {
+                    if (! is_array($fn)) {
+                        return $fn;
+                    }
+                    // Ensure web footnotes expose url for mobile Linking.openURL.
+                    if (! array_key_exists('url', $fn)) {
+                        $fn['url'] = null;
+                    }
+                    if (! array_key_exists('document_id', $fn)) {
+                        $fn['document_id'] = null;
+                    }
+
+                    return $fn;
+                }, $message->footnotes ?? []))
                 : [],
             'mentions' => $message->mentions->map(fn (RoomMessageMention $m) => [
                 'type' => $m->mention_type,
