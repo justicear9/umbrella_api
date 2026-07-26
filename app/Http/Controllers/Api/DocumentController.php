@@ -43,6 +43,8 @@ class DocumentController extends Controller
             'url' => $path.'?'.http_build_query($query),
             'page' => $page,
             'title' => $document->title,
+            'file_ready' => $this->resolveAbsolutePath($document) !== null,
+            'file_path' => $document->file_path,
             'expires_at' => $expires,
         ]);
     }
@@ -62,11 +64,11 @@ class DocumentController extends Controller
         }
 
         $disk = Storage::disk('local');
-        if (! $disk->exists($document->file_path)) {
-            abort(404, 'File missing');
+        $absolute = $this->resolveAbsolutePath($document);
+        if ($absolute === null) {
+            abort(404, 'File missing at '.$document->file_path.' (upload the PDF to storage/app/private/'.$document->file_path.' on the server)');
         }
 
-        $absolute = $disk->path($document->file_path);
         $filename = basename($document->original_filename ?: $document->file_path);
 
         return response()->stream(function () use ($absolute) {
@@ -86,6 +88,71 @@ class DocumentController extends Controller
             'Access-Control-Allow-Methods' => 'GET, OPTIONS',
             'Access-Control-Allow-Headers' => 'Content-Type, Range',
             'X-Document-Page' => (string) max(1, $page),
+        ]);
+    }
+
+    /**
+     * Resolve a document PDF on disk. Laravel's local disk roots at storage/app/private,
+     * but some deploys also keep files under storage/app/documents.
+     */
+    private function resolveAbsolutePath(Document $document): ?string
+    {
+        $relative = (string) $document->file_path;
+        if ($relative === '') {
+            return null;
+        }
+
+        $candidates = [
+            Storage::disk('local')->path($relative),
+            storage_path('app/private/'.$relative),
+            storage_path('app/'.$relative),
+        ];
+
+        foreach (array_unique($candidates) as $path) {
+            if (is_file($path) && is_readable($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    public function replaceFile(Request $request, Document $document)
+    {
+        $adminKey = (string) $request->header('X-Admin-Key', '');
+        $expected = (string) config('ndc.admin_key', env('NDC_ADMIN_KEY'));
+        if ($expected === '' || ! hash_equals($expected, $adminKey)) {
+            abort(403, 'Forbidden');
+        }
+
+        if ($document->status !== 'ready' && $document->status !== 'pending') {
+            abort(404, 'Document not found');
+        }
+
+        $data = $request->validate([
+            'file' => ['required', 'file', 'mimes:pdf', 'max:51200'],
+        ]);
+
+        $file = $data['file'];
+        $relative = $document->file_path ?: ('documents/'.basename((string) $file->hashName('documents')));
+        if (! str_contains($relative, '/')) {
+            $relative = 'documents/'.$relative;
+        }
+
+        Storage::disk('local')->makeDirectory(dirname($relative));
+        Storage::disk('local')->putFileAs(dirname($relative), $file, basename($relative));
+
+        $document->update([
+            'file_path' => $relative,
+            'original_filename' => $file->getClientOriginalName() ?: $document->original_filename,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'document_id' => $document->id,
+            'title' => $document->title,
+            'file_path' => $document->file_path,
+            'bytes' => Storage::disk('local')->size($document->file_path),
         ]);
     }
 

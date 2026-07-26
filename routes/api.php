@@ -18,6 +18,7 @@ Route::get('/media/tts/{file}', [MediaController::class, 'audio'])->where('file'
 Route::post('/stt', [MediaController::class, 'stt']);
 
 Route::get('/documents/{document}/file', [DocumentController::class, 'file']);
+Route::post('/documents/{document}/replace-file', [DocumentController::class, 'replaceFile']);
 
 Route::post('/auth/login', [AuthController::class, 'login']);
 
