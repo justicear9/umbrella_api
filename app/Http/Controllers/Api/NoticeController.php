@@ -75,6 +75,20 @@ class NoticeController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function markAllRead(Request $request)
+    {
+        $updated = NoticeUser::query()
+            ->where('user_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->whereHas('notice', fn ($q) => $q->where('status', 'published'))
+            ->update(['read_at' => now()]);
+
+        return response()->json([
+            'success' => true,
+            'updated' => $updated,
+        ]);
+    }
+
     private function serialize(NoticeUser $nu): array
     {
         $n = $nu->notice;

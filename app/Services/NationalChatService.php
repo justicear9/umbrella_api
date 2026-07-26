@@ -179,12 +179,23 @@ class NationalChatService
             Log::warning('National chat @comrade web verify failed', ['error' => $e->getMessage()]);
         }
 
-        $answer = $this->mergeComradeAnswers($question, $digestAnswer, $webAnswer, $webFootnotes !== []);
+        $verifyAsk = (bool) preg_match(
+            '/\b(verify|verif(?:y|ication)?|fact[- ]?check|confirm|is that true|true or false|claim|rumour|rumor|check (?:that|this|it))\b/i',
+            $question
+        );
+
+        $answer = $this->mergeComradeAnswers($question, $digestAnswer, $webAnswer, $webFootnotes !== [], $verifyAsk);
         if ($answer === '') {
             $answer = 'I could not form a reply from digested sources or live news just now. Try asking again with a bit more detail.';
         }
 
-        $footnotes = array_values(array_merge($footnotes, $webFootnotes));
+        // Online confirmation: news footnotes only — skip digest manifesto/PDF cites.
+        if ($verifyAsk && $webAnswer !== '' && $webFootnotes !== []) {
+            $citations = [];
+            $footnotes = $webFootnotes;
+        } else {
+            $footnotes = array_values(array_merge($footnotes, $webFootnotes));
+        }
 
         $ai = RoomMessage::create([
             'chat_room_id' => $userMessage->chat_room_id,
@@ -278,8 +289,13 @@ PROMPT;
     /**
      * Combine digest briefing with live news verification into one room reply.
      */
-    private function mergeComradeAnswers(string $question, string $digest, string $web, bool $hasWebSources): string
-    {
+    private function mergeComradeAnswers(
+        string $question,
+        string $digest,
+        string $web,
+        bool $hasWebSources,
+        bool $verifyAsk,
+    ): string {
         $digest = trim($digest);
         $web = trim($web);
 
@@ -293,13 +309,9 @@ PROMPT;
             return $digest;
         }
 
-        $verifyAsk = (bool) preg_match(
-            '/\b(verify|verif(?:y|ication)?|fact[- ]?check|confirm|is that true|true or false|claim|rumour|rumor|check (?:that|this|it))\b/i',
-            $question
-        );
-
+        // Confirming from the web: return live news only — no digested briefing block.
         if ($verifyAsk && $hasWebSources) {
-            return $web."\n\n---\n**From digested briefings**\n\n".$digest;
+            return $web;
         }
 
         if ($hasWebSources) {

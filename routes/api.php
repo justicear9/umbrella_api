@@ -52,6 +52,7 @@ Route::middleware('api.token')->group(function () {
     Route::get('/communicators/{user}', [CommunicatorDirectoryController::class, 'show']);
 
     Route::get('/notices/unread-count', [NoticeController::class, 'unreadCount']);
+    Route::post('/notices/read-all', [NoticeController::class, 'markAllRead']);
     Route::get('/notices', [NoticeController::class, 'index']);
     Route::get('/notices/{notice}', [NoticeController::class, 'show']);
     Route::post('/notices/{notice}/read', [NoticeController::class, 'markRead']);
