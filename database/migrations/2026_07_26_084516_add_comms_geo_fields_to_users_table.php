@@ -9,18 +9,36 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->string('comms_level', 32)->nullable()->after('occupation'); // national|constituency
-            $table->foreignId('region_id')->nullable()->after('comms_level')->constrained()->nullOnDelete();
-            $table->foreignId('constituency_id')->nullable()->after('region_id')->constrained()->nullOnDelete();
+            if (! Schema::hasColumn('users', 'comms_level')) {
+                $table->string('comms_level', 32)->nullable()->after('occupation');
+            }
+            if (! Schema::hasColumn('users', 'region_id')) {
+                // No DB-level FK: shared MySQL/MariaDB often rejects ALTER on legacy `users`
+                // (errno 150). Integrity is enforced in app validation.
+                $table->unsignedBigInteger('region_id')->nullable()->after('comms_level');
+                $table->index('region_id');
+            }
+            if (! Schema::hasColumn('users', 'constituency_id')) {
+                $table->unsignedBigInteger('constituency_id')->nullable()->after('region_id');
+                $table->index('constituency_id');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('constituency_id');
-            $table->dropConstrainedForeignId('region_id');
-            $table->dropColumn('comms_level');
+            if (Schema::hasColumn('users', 'constituency_id')) {
+                $table->dropIndex(['constituency_id']);
+                $table->dropColumn('constituency_id');
+            }
+            if (Schema::hasColumn('users', 'region_id')) {
+                $table->dropIndex(['region_id']);
+                $table->dropColumn('region_id');
+            }
+            if (Schema::hasColumn('users', 'comms_level')) {
+                $table->dropColumn('comms_level');
+            }
         });
     }
 };
