@@ -3,8 +3,12 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BriefingController;
 use App\Http\Controllers\Api\ChatHistoryController;
+use App\Http\Controllers\Api\DevicePushTokenController;
 use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\GeographyController;
 use App\Http\Controllers\Api\MediaController;
+use App\Http\Controllers\Api\MediaLibraryController;
+use App\Http\Controllers\Api\NoticeController;
 use App\Http\Controllers\Api\PressPrepController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +23,7 @@ Route::post('/stt', [MediaController::class, 'stt']);
 
 Route::get('/documents/{document}/file', [DocumentController::class, 'file']);
 Route::post('/documents/{document}/replace-file', [DocumentController::class, 'replaceFile']);
+Route::get('/media-assets/{mediaAsset}/file', [MediaLibraryController::class, 'file']);
 
 Route::post('/auth/login', [AuthController::class, 'login']);
 
@@ -33,6 +38,18 @@ Route::middleware('api.token')->group(function () {
     Route::post('/chat/send', [ChatHistoryController::class, 'send']);
 
     Route::post('/documents/{document}/signed-url', [DocumentController::class, 'signedUrl']);
+
+    Route::get('/geography', [GeographyController::class, 'index']);
+    Route::post('/device/push-token', [DevicePushTokenController::class, 'store']);
+
+    Route::get('/notices/unread-count', [NoticeController::class, 'unreadCount']);
+    Route::get('/notices', [NoticeController::class, 'index']);
+    Route::get('/notices/{notice}', [NoticeController::class, 'show']);
+    Route::post('/notices/{notice}/read', [NoticeController::class, 'markRead']);
+
+    Route::get('/media-assets', [MediaLibraryController::class, 'index']);
+    Route::get('/media-assets/{mediaAsset}', [MediaLibraryController::class, 'show']);
+    Route::post('/media-assets/{mediaAsset}/signed-url', [MediaLibraryController::class, 'signedUrl']);
 
     Route::get('/press-prep/mine', [PressPrepController::class, 'mine']);
     Route::post('/press-prep/sessions', [PressPrepController::class, 'store']);

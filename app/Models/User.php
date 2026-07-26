@@ -27,6 +27,9 @@ class User extends Authenticatable
         'date_of_birth',
         'constituency',
         'occupation',
+        'comms_level',
+        'region_id',
+        'constituency_id',
         'api_token',
     ];
 
@@ -78,6 +81,16 @@ class User extends Authenticatable
         $this->forceFill(['api_token' => null])->save();
     }
 
+    public function region(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Region::class);
+    }
+
+    public function constituencyRef(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Constituency::class, 'constituency_id');
+    }
+
     public function chatThreads(): HasMany
     {
         return $this->hasMany(ChatThread::class)->orderByDesc('last_message_at');
@@ -88,8 +101,15 @@ class User extends Authenticatable
         return $this->hasMany(PressPrepSession::class)->latest();
     }
 
+    public function devicePushTokens(): HasMany
+    {
+        return $this->hasMany(DevicePushToken::class);
+    }
+
     public function toPublicArray(): array
     {
+        $this->loadMissing(['region:id,name', 'constituencyRef:id,name,region_id']);
+
         return [
             'id' => $this->id,
             'role' => $this->role,
@@ -97,8 +117,13 @@ class User extends Authenticatable
             'email' => $this->email,
             'party_id' => $this->party_id,
             'date_of_birth' => $this->date_of_birth?->format('Y-m-d'),
-            'constituency' => $this->constituency,
+            'constituency' => $this->constituencyRef?->name ?? $this->constituency,
             'occupation' => $this->occupation,
+            'comms_level' => $this->comms_level,
+            'region_id' => $this->region_id,
+            'constituency_id' => $this->constituency_id,
+            'region_name' => $this->region?->name,
+            'constituency_name' => $this->constituencyRef?->name ?? $this->constituency,
         ];
     }
 }

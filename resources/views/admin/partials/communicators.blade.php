@@ -2,7 +2,7 @@
     <div class="stack">
         <div class="card">
             <h2>Create communicator</h2>
-            <p class="card-lede">Name, DOB, constituency, occupation, Party ID. They sign in on mobile with Party ID + password.</p>
+            <p class="card-lede">Name, DOB, National/Constituency level, region &amp; constituency, Party ID. Sign-in is Party ID + password.</p>
             <form method="POST" action="{{ route('admin.communicators.store') }}">
                 @csrf
                 <div class="form-grid">
@@ -15,8 +15,33 @@
                         <input id="comm-dob" type="date" name="date_of_birth" required value="{{ old('date_of_birth') }}">
                     </div>
                     <div>
-                        <label for="comm-constituency">Constituency</label>
-                        <input id="comm-constituency" type="text" name="constituency" required placeholder="Ablekuma West" value="{{ old('constituency') }}">
+                        <label for="comm-level">Comms level</label>
+                        <select id="comm-level" name="comms_level" required>
+                            <option value="national" @selected(old('comms_level') === 'national')>National Comms</option>
+                            <option value="constituency" @selected(old('comms_level', 'constituency') === 'constituency')>Constituency Comms</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="comm-region">Region</label>
+                        <select id="comm-region" name="region_id">
+                            <option value="">— Select region —</option>
+                            @foreach ($regions as $region)
+                                <option value="{{ $region->id }}" @selected((string) old('region_id') === (string) $region->id)>{{ $region->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label for="comm-constituency-id">Constituency</label>
+                        <select id="comm-constituency-id" name="constituency_id">
+                            <option value="">— Select constituency —</option>
+                            @foreach ($regions as $region)
+                                <optgroup label="{{ $region->name }}">
+                                    @foreach ($region->constituencies as $c)
+                                        <option value="{{ $c->id }}" data-region="{{ $region->id }}" @selected((string) old('constituency_id') === (string) $c->id)>{{ $c->name }}</option>
+                                    @endforeach
+                                </optgroup>
+                            @endforeach
+                        </select>
                     </div>
                     <div>
                         <label for="comm-occupation">Occupation</label>
@@ -42,14 +67,15 @@
                 <div class="table-wrap" style="margin-top:1.25rem">
                     <table>
                         <thead>
-                        <tr><th>Name</th><th>Party ID</th><th>Constituency</th><th>Occupation</th></tr>
+                        <tr><th>Name</th><th>Party ID</th><th>Level</th><th>Region / Constituency</th><th>Occupation</th></tr>
                         </thead>
                         <tbody>
                         @foreach ($communicators as $c)
                             <tr>
                                 <td>{{ $c->name }}</td>
                                 <td><code>{{ $c->party_id }}</code></td>
-                                <td>{{ $c->constituency }}</td>
+                                <td>{{ $c->comms_level ?: '—' }}</td>
+                                <td>{{ $c->region?->name ?: '—' }} / {{ $c->constituencyRef?->name ?: ($c->constituency ?: '—') }}</td>
                                 <td>{{ $c->occupation }}</td>
                             </tr>
                         @endforeach

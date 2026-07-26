@@ -3,6 +3,8 @@
     "overview",
     "communicators",
     "press-prep",
+    "notices",
+    "media",
     "documents",
     "settings",
   ];
@@ -11,6 +13,8 @@
     overview: "Overview",
     communicators: "Communicators",
     "press-prep": "Press Prep",
+    notices: "Notices",
+    media: "Media",
     documents: "Documents",
     settings: "Settings",
   };

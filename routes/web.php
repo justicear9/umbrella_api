@@ -23,4 +23,14 @@ Route::middleware(AdminKeyMiddleware::class)->prefix('admin')->group(function ()
     Route::get('/press-prep/{session}', [AdminController::class, 'pressPrepTranscript'])->name('admin.press-prep.show');
     Route::get('/press-prep/{session}/transcript.txt', [AdminController::class, 'pressPrepTranscriptTxt'])->name('admin.press-prep.transcript.txt');
     Route::get('/press-prep/{session}/transcript.pdf', [AdminController::class, 'pressPrepTranscriptPdf'])->name('admin.press-prep.transcript.pdf');
+
+    Route::post('/notices', [AdminController::class, 'storeNotice'])->name('admin.notices.store');
+    Route::post('/notices/{notice}/publish', [AdminController::class, 'publishNotice'])->name('admin.notices.publish');
+    Route::post('/notices/{notice}/unpublish', [AdminController::class, 'unpublishNotice'])->name('admin.notices.unpublish');
+    Route::delete('/notices/{notice}', [AdminController::class, 'destroyNotice'])->name('admin.notices.destroy');
+
+    Route::post('/media', [AdminController::class, 'storeMedia'])->name('admin.media.store');
+    Route::post('/media/{mediaAsset}/publish', [AdminController::class, 'publishMedia'])->name('admin.media.publish');
+    Route::post('/media/{mediaAsset}/unpublish', [AdminController::class, 'unpublishMedia'])->name('admin.media.unpublish');
+    Route::delete('/media/{mediaAsset}', [AdminController::class, 'destroyMedia'])->name('admin.media.destroy');
 });

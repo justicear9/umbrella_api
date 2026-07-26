@@ -5,11 +5,19 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Mail\PressPrepAssignedMail;
 use App\Models\Briefing;
+use App\Models\Constituency;
 use App\Models\Document;
+use App\Models\MediaAsset;
+use App\Models\MediaTarget;
+use App\Models\Notice;
+use App\Models\NoticeTarget;
 use App\Models\PressPrepSession;
+use App\Models\Region;
 use App\Models\User;
 use App\Services\DocumentIngestService;
 use App\Services\GeminiTtsService;
+use App\Services\MediaPublishService;
+use App\Services\NoticePublishService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\Request;
@@ -49,6 +57,7 @@ class AdminController extends Controller
         $env = $this->readEnvMap();
         $communicators = User::query()
             ->where('role', User::ROLE_COMMUNICATOR)
+            ->with(['region:id,name', 'constituencyRef:id,name'])
             ->orderBy('name')
             ->get();
         $admins = User::query()->where('role', User::ROLE_ADMIN)->orderBy('name')->get();
@@ -61,6 +70,9 @@ class AdminController extends Controller
             ->latest()
             ->limit(40)
             ->get();
+        $regions = Region::query()->with(['constituencies' => fn ($q) => $q->orderBy('name')])->orderBy('name')->get();
+        $notices = Notice::query()->latest()->limit(50)->get();
+        $mediaAssets = MediaAsset::query()->latest()->limit(50)->get();
         $geminiConfigured = $tts->isConfigured();
 
         return view('admin.dashboard', [
@@ -72,6 +84,9 @@ class AdminController extends Controller
             'communicators' => $communicators,
             'admins' => $admins,
             'prepScores' => $prepScores,
+            'regions' => $regions,
+            'notices' => $notices,
+            'mediaAssets' => $mediaAssets,
             'geminiConfigured' => $geminiConfigured,
             'geminiKeyMasked' => $this->maskSecret($env['GEMINI_API_KEY'] ?? ''),
             'geminiModel' => $env['GEMINI_TTS_MODEL'] ?? config('services.gemini.tts_model'),
@@ -97,12 +112,29 @@ class AdminController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'date_of_birth' => ['required', 'date'],
-            'constituency' => ['required', 'string', 'max:120'],
+            'comms_level' => ['required', Rule::in(['national', 'constituency'])],
+            'region_id' => ['nullable', 'integer', 'exists:regions,id'],
+            'constituency_id' => ['nullable', 'integer', 'exists:constituencies,id'],
             'occupation' => ['required', 'string', 'max:120'],
             'party_id' => ['required', 'string', 'max:80', 'unique:users,party_id'],
             'password' => ['required', 'string', 'min:6', 'max:80'],
             'email' => ['nullable', 'email', 'max:160', 'unique:users,email'],
         ]);
+
+        if ($data['comms_level'] === 'constituency') {
+            $request->validate([
+                'region_id' => ['required', 'integer', 'exists:regions,id'],
+                'constituency_id' => ['required', 'integer', 'exists:constituencies,id'],
+            ]);
+        }
+
+        $constituency = ! empty($data['constituency_id'])
+            ? Constituency::query()->with('region')->find($data['constituency_id'])
+            : null;
+
+        if ($constituency && (int) $constituency->region_id !== (int) ($data['region_id'] ?? 0)) {
+            return back()->withErrors(['constituency_id' => 'Constituency must belong to the selected region.'])->withInput();
+        }
 
         $partyId = trim($data['party_id']);
         $email = isset($data['email']) && trim((string) $data['email']) !== ''
@@ -115,9 +147,12 @@ class AdminController extends Controller
             'email' => $email,
             'party_id' => $partyId,
             'date_of_birth' => $data['date_of_birth'],
-            'constituency' => $data['constituency'],
+            'constituency' => $constituency?->name,
             'occupation' => $data['occupation'],
             'password' => $data['password'],
+            'comms_level' => $data['comms_level'],
+            'region_id' => $data['region_id'] ?? $constituency?->region_id,
+            'constituency_id' => $constituency?->id,
         ]);
 
         return $this->dashboardRedirect(
@@ -413,6 +448,222 @@ class AdminController extends Controller
         $document->delete();
 
         return $this->dashboardRedirect('documents', 'Document deleted.');
+    }
+
+    public function storeNotice(Request $request, NoticePublishService $publisher)
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'body' => ['required', 'string'],
+            'link_url' => ['nullable', 'url', 'max:500'],
+            'priority' => ['required', Rule::in(['normal', 'urgent'])],
+            'audience_mode' => ['required', Rule::in(['all', 'group_national', 'group_constituency', 'regions', 'constituencies'])],
+            'target_ids' => ['nullable', 'array'],
+            'target_ids.*' => ['string'],
+            'action' => ['nullable', Rule::in(['draft', 'publish'])],
+        ]);
+
+        $notice = Notice::create([
+            'title' => $data['title'],
+            'body' => $data['body'],
+            'link_url' => $data['link_url'] ?? null,
+            'priority' => $data['priority'],
+            'audience_mode' => $data['audience_mode'],
+            'status' => 'draft',
+        ]);
+
+        $this->syncTargets($notice, $data['audience_mode'], $data['target_ids'] ?? []);
+
+        if (($data['action'] ?? 'draft') === 'publish') {
+            $result = $publisher->publish($notice->fresh('targets'));
+
+            return $this->dashboardRedirect(
+                'notices',
+                "Notice published to {$result['recipients']} communicator(s) ({$result['emailed']} emailed)."
+            );
+        }
+
+        return $this->dashboardRedirect('notices', 'Notice saved as draft.');
+    }
+
+    public function publishNotice(Notice $notice, NoticePublishService $publisher)
+    {
+        $result = $publisher->publish($notice->load('targets'));
+
+        return $this->dashboardRedirect(
+            'notices',
+            "Notice published to {$result['recipients']} communicator(s)."
+        );
+    }
+
+    public function unpublishNotice(Notice $notice)
+    {
+        $notice->update(['status' => 'unpublished']);
+
+        return $this->dashboardRedirect('notices', 'Notice unpublished.');
+    }
+
+    public function destroyNotice(Notice $notice)
+    {
+        $notice->delete();
+
+        return $this->dashboardRedirect('notices', 'Notice deleted.');
+    }
+
+    public function storeMedia(Request $request, MediaPublishService $publisher)
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'kind' => ['nullable', Rule::in(['document', 'video', 'audio', 'photo'])],
+            'file' => ['required', 'file', 'max:102400'],
+            'audience_mode' => ['required', Rule::in(['all', 'group_national', 'group_constituency', 'regions', 'constituencies'])],
+            'target_ids' => ['nullable', 'array'],
+            'target_ids.*' => ['string'],
+            'action' => ['nullable', Rule::in(['draft', 'publish'])],
+        ]);
+
+        $file = $request->file('file');
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $kind = $data['kind'] ?: $this->detectMediaKind($ext, (string) $file->getMimeType());
+        if (! $kind) {
+            return back()->withErrors(['file' => 'Unsupported file type.'])->withInput();
+        }
+
+        $filename = (string) Str::uuid().'.'.$ext;
+        $path = $file->storeAs('media', $filename);
+
+        $asset = MediaAsset::create([
+            'title' => $data['title'],
+            'description' => $data['description'] ?? null,
+            'kind' => $kind,
+            'original_filename' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'mime' => $file->getMimeType(),
+            'byte_size' => $file->getSize() ?: 0,
+            'audience_mode' => $data['audience_mode'],
+            'status' => 'draft',
+        ]);
+
+        $this->syncMediaTargets($asset, $data['audience_mode'], $data['target_ids'] ?? []);
+
+        if (($data['action'] ?? 'draft') === 'publish') {
+            $result = $publisher->publish($asset->fresh('targets'));
+
+            return $this->dashboardRedirect(
+                'media',
+                "Media published to {$result['recipients']} communicator(s)."
+            );
+        }
+
+        return $this->dashboardRedirect('media', 'Media uploaded as draft.');
+    }
+
+    public function publishMedia(MediaAsset $mediaAsset, MediaPublishService $publisher)
+    {
+        $result = $publisher->publish($mediaAsset->load('targets'));
+
+        return $this->dashboardRedirect('media', "Media published to {$result['recipients']} communicator(s).");
+    }
+
+    public function unpublishMedia(MediaAsset $mediaAsset)
+    {
+        $mediaAsset->update(['status' => 'unpublished']);
+
+        return $this->dashboardRedirect('media', 'Media unpublished.');
+    }
+
+    public function destroyMedia(MediaAsset $mediaAsset)
+    {
+        Storage::disk('local')->delete($mediaAsset->file_path);
+        $mediaAsset->delete();
+
+        return $this->dashboardRedirect('media', 'Media deleted.');
+    }
+
+    /**
+     * @param  list<string>  $rawTargets
+     */
+    private function syncTargets(Notice $notice, string $mode, array $rawTargets): void
+    {
+        $notice->targets()->delete();
+        foreach ($this->parseTargetPairs($mode, $rawTargets) as $pair) {
+            NoticeTarget::create([
+                'notice_id' => $notice->id,
+                'target_type' => $pair['type'],
+                'target_id' => $pair['id'],
+            ]);
+        }
+    }
+
+    /**
+     * @param  list<string>  $rawTargets
+     */
+    private function syncMediaTargets(MediaAsset $asset, string $mode, array $rawTargets): void
+    {
+        $asset->targets()->delete();
+        foreach ($this->parseTargetPairs($mode, $rawTargets) as $pair) {
+            MediaTarget::create([
+                'media_asset_id' => $asset->id,
+                'target_type' => $pair['type'],
+                'target_id' => $pair['id'],
+            ]);
+        }
+    }
+
+    /**
+     * @param  list<string>  $rawTargets
+     * @return list<array{type: string, id: int}>
+     */
+    private function parseTargetPairs(string $mode, array $rawTargets): array
+    {
+        if (! in_array($mode, ['regions', 'constituencies'], true)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rawTargets as $raw) {
+            if (! is_string($raw) || ! str_contains($raw, ':')) {
+                continue;
+            }
+            [$prefix, $id] = explode(':', $raw, 2);
+            $id = (int) $id;
+            if ($id < 1) {
+                continue;
+            }
+            if ($mode === 'regions' && $prefix === 'r') {
+                $out[] = ['type' => 'region', 'id' => $id];
+            }
+            if ($mode === 'constituencies' && $prefix === 'c') {
+                $out[] = ['type' => 'constituency', 'id' => $id];
+            }
+        }
+
+        return $out;
+    }
+
+    private function detectMediaKind(string $ext, string $mime): ?string
+    {
+        $map = [
+            'pdf' => 'document', 'xlsx' => 'document', 'xls' => 'document', 'doc' => 'document', 'docx' => 'document',
+            'mp4' => 'video', 'mov' => 'video',
+            'mp3' => 'audio', 'wav' => 'audio',
+            'jpg' => 'photo', 'jpeg' => 'photo', 'heic' => 'photo', 'png' => 'photo',
+        ];
+        if (isset($map[$ext])) {
+            return $map[$ext];
+        }
+        if (str_starts_with($mime, 'image/')) {
+            return 'photo';
+        }
+        if (str_starts_with($mime, 'video/')) {
+            return 'video';
+        }
+        if (str_starts_with($mime, 'audio/')) {
+            return 'audio';
+        }
+
+        return null;
     }
 
     private function maskSecret(string $value): string
