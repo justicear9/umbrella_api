@@ -376,6 +376,53 @@
       initAudiencePicker(root);
     });
 
+    document.querySelectorAll("form[data-media-upload]").forEach((form) => {
+      const maxBytes = Number(form.getAttribute("data-max-bytes") || 104857600);
+      const fileInput = form.querySelector('input[type="file"][name="file"]');
+      const hint = form.querySelector("[data-media-file-hint]");
+
+      function formatMb(bytes) {
+        return (bytes / 1048576).toFixed(1) + " MB";
+      }
+
+      function validateFile() {
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        if (!file) {
+          if (hint) hint.textContent = "";
+          return true;
+        }
+        if (hint) {
+          hint.textContent = `Selected: ${file.name} (${formatMb(file.size)})`;
+        }
+        if (file.size > maxBytes) {
+          window.alert(
+            `This file is ${formatMb(file.size)}. Maximum allowed is ${formatMb(maxBytes)}.`
+          );
+          fileInput.value = "";
+          if (hint) hint.textContent = "";
+          return false;
+        }
+        return true;
+      }
+
+      if (fileInput) {
+        fileInput.addEventListener("change", validateFile);
+      }
+      form.addEventListener("submit", (e) => {
+        if (!validateFile()) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Re-enable submit buttons disabled by the global handler
+          form.querySelectorAll('button[type="submit"]').forEach((btn) => {
+            btn.disabled = false;
+            if (btn.dataset.originalLabel) {
+              btn.textContent = btn.dataset.originalLabel;
+            }
+          });
+        }
+      });
+    });
+
     const modal = document.getElementById("transcript-modal");
     const base = (window.NDC_ADMIN && window.NDC_ADMIN.pressPrepShowUrl) || "/admin/press-prep";
 

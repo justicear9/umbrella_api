@@ -3,7 +3,7 @@
         <div class="card">
             <h2>Upload media</h2>
             <p class="card-lede">Documents, video, audio, photos (max 100 MB). Pick audience; optional target tags narrow Constituency or Region.</p>
-            <form method="POST" action="{{ route('admin.media.store') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ route('admin.media.store') }}" enctype="multipart/form-data" data-media-upload data-max-bytes="104857600">
                 @csrf
                 <label for="media-title">Title</label>
                 <input id="media-title" type="text" name="title" required maxlength="255" value="{{ old('title') }}">
@@ -11,8 +11,9 @@
                 <label for="media-desc">Description</label>
                 <textarea id="media-desc" name="description" rows="3">{{ old('description') }}</textarea>
 
-                <label for="media-file">File</label>
+                <label for="media-file">File <span class="muted">(max 100 MB)</span></label>
                 <input id="media-file" type="file" name="file" required accept=".pdf,.xlsx,.xls,.doc,.docx,.mp4,.mov,.mp3,.wav,.jpg,.jpeg,.heic,.png,application/pdf,image/*,audio/*,video/*">
+                <p class="muted" data-media-file-hint></p>
 
                 <label for="media-kind">Kind (optional override)</label>
                 <select id="media-kind" name="kind">

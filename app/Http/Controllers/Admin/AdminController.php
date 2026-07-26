@@ -517,6 +517,26 @@ class AdminController extends Controller
 
     public function storeMedia(Request $request, MediaPublishService $publisher)
     {
+        // When the body exceeds PHP post_max_size, $_POST/$_FILES are emptied and
+        // Laravel validation/back()->withInput() can fatal with a 500.
+        $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
+        $postMax = $this->phpSizeToBytes((string) ini_get('post_max_size'));
+        if ($contentLength > 0 && $postMax > 0 && $contentLength > $postMax) {
+            return redirect()
+                ->route('admin.dashboard', ['section' => 'media'])
+                ->withErrors([
+                    'file' => 'File is too large for the server upload limit ('.ini_get('post_max_size').'). Max media size is 100 MB — ask hosting to raise post_max_size / upload_max_filesize.',
+                ]);
+        }
+
+        if (! $request->hasFile('file')) {
+            return redirect()
+                ->route('admin.dashboard', ['section' => 'media'])
+                ->withErrors([
+                    'file' => 'No file received. If the file is large, the server upload limit may be too low (current upload_max_filesize='.ini_get('upload_max_filesize').').',
+                ]);
+        }
+
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -532,7 +552,10 @@ class AdminController extends Controller
         $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
         $kind = $data['kind'] ?: $this->detectMediaKind($ext, (string) $file->getMimeType());
         if (! $kind) {
-            return back()->withErrors(['file' => 'Unsupported file type.'])->withInput();
+            return redirect()
+                ->route('admin.dashboard', ['section' => 'media'])
+                ->withErrors(['file' => 'Unsupported file type.'])
+                ->withInput($request->except('file'));
         }
 
         $filename = (string) Str::uuid().'.'.$ext;
@@ -691,6 +714,24 @@ class AdminController extends Controller
         }
 
         return $out;
+    }
+
+    private function phpSizeToBytes(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '' || $value === '0') {
+            return 0;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        $number = (float) $value;
+
+        return (int) match ($unit) {
+            'g' => $number * 1024 * 1024 * 1024,
+            'm' => $number * 1024 * 1024,
+            'k' => $number * 1024,
+            default => $number,
+        };
     }
 
     private function detectMediaKind(string $ext, string $mime): ?string
