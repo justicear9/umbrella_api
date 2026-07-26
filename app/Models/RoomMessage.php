@@ -20,7 +20,17 @@ class RoomMessage extends Model
         'user_id',
         'kind',
         'body',
+        'citations',
+        'footnotes',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'citations' => 'array',
+            'footnotes' => 'array',
+        ];
+    }
 
     public function room(): BelongsTo
     {

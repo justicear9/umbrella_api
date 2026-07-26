@@ -153,10 +153,15 @@ class NationalChatService
         $roomContext = $this->recentRoomTranscript($userMessage, 20);
         $prompt = $this->buildComradePrompt($author, $question, $roomContext);
 
+        $citations = [];
+        $footnotes = [];
+
         try {
             // RagService returns `response` (same shape as Ask / Briefing).
             $result = $this->rag->answer($prompt, []);
             $answer = trim((string) ($result['response'] ?? ''));
+            $citations = is_array($result['citations'] ?? null) ? $result['citations'] : [];
+            $footnotes = is_array($result['footnotes'] ?? null) ? $result['footnotes'] : [];
             if ($answer === '') {
                 $answer = 'I could not form a reply from the digested sources just now. Try asking again with a bit more detail.';
             }
@@ -170,6 +175,8 @@ class NationalChatService
             'user_id' => null,
             'kind' => RoomMessage::KIND_AI,
             'body' => $answer,
+            'citations' => $citations !== [] ? $citations : null,
+            'footnotes' => $footnotes !== [] ? $footnotes : null,
         ]);
         $ai->load(['mentions']);
 
@@ -280,6 +287,12 @@ PROMPT;
             'body' => $message->body,
             'created_at' => $message->created_at?->toIso8601String(),
             'author' => $author,
+            'citations' => $message->kind === RoomMessage::KIND_AI
+                ? array_values($message->citations ?? [])
+                : [],
+            'footnotes' => $message->kind === RoomMessage::KIND_AI
+                ? array_values($message->footnotes ?? [])
+                : [],
             'mentions' => $message->mentions->map(fn (RoomMessageMention $m) => [
                 'type' => $m->mention_type,
                 'constituency_id' => $m->constituency_id,
