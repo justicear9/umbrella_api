@@ -126,4 +126,35 @@ class User extends Authenticatable
             'constituency_name' => $this->constituencyRef?->name ?? $this->constituency,
         ];
     }
+
+    /** Peer-visible profile — no DOB / email. */
+    public function toPeerPublicArray(): array
+    {
+        $this->loadMissing(['region:id,name', 'constituencyRef:id,name,region_id']);
+
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'party_id' => $this->party_id,
+            'occupation' => $this->occupation,
+            'comms_level' => $this->comms_level,
+            'region_id' => $this->region_id,
+            'constituency_id' => $this->constituency_id,
+            'region_name' => $this->region?->name,
+            'constituency_name' => $this->constituencyRef?->name ?? $this->constituency,
+        ];
+    }
+
+    /** Directory list row. */
+    public function toDirectoryArray(): array
+    {
+        $peer = $this->toPeerPublicArray();
+        $parts = preg_split('/\s+/', trim((string) $this->name)) ?: [];
+        $peer['first_name'] = $parts[0] !== '' ? $parts[0] : $this->name;
+        $peer['tag'] = $this->comms_level === 'national'
+            ? 'National'
+            : ($peer['constituency_name'] ?: 'Constituency');
+
+        return $peer;
+    }
 }

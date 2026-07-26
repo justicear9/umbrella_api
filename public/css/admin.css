@@ -801,6 +801,16 @@ th {
   margin-top: 0.1rem;
 }
 
+.media-edit-row td {
+  background: var(--surface);
+  padding: 1rem 1rem 1.15rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.media-edit-form {
+  max-width: 720px;
+}
+
 @media (max-width: 900px) {
   .stats {
     grid-template-columns: 1fr 1fr;

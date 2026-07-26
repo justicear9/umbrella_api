@@ -72,7 +72,7 @@ class AdminController extends Controller
             ->get();
         $regions = Region::query()->with(['constituencies' => fn ($q) => $q->orderBy('name')])->orderBy('name')->get();
         $notices = Notice::query()->latest()->limit(50)->get();
-        $mediaAssets = MediaAsset::query()->latest()->limit(50)->get();
+        $mediaAssets = MediaAsset::query()->with('targets')->latest()->limit(50)->get();
         $geminiConfigured = $tts->isConfigured();
 
         return view('admin.dashboard', [
@@ -590,6 +590,80 @@ class AdminController extends Controller
         }
 
         return $this->dashboardRedirect('media', 'Media uploaded as draft.');
+    }
+
+    public function updateMedia(Request $request, MediaAsset $mediaAsset)
+    {
+        $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
+        $postMax = $this->phpSizeToBytes((string) ini_get('post_max_size'));
+        if ($contentLength > 0 && $postMax > 0 && $contentLength > $postMax) {
+            return redirect()
+                ->route('admin.dashboard', ['section' => 'media'])
+                ->withErrors([
+                    'file' => 'File is too large for the server upload limit ('.ini_get('post_max_size').'). Max media size is 100 MB.',
+                ]);
+        }
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'kind' => ['nullable', Rule::in(['document', 'video', 'audio', 'photo'])],
+            'file' => ['nullable', 'file', 'max:102400'],
+            'audience_mode' => ['required', Rule::in(['all', 'group_national', 'group_constituency', 'regions', 'constituencies'])],
+            'target_ids' => ['nullable', 'array'],
+            'target_ids.*' => ['string'],
+        ]);
+
+        [$mode, $rawTargets] = $this->normalizeAudienceInput(
+            $data['audience_mode'],
+            $data['target_ids'] ?? []
+        );
+
+        $updates = [
+            'title' => $data['title'],
+            'description' => $data['description'] ?? null,
+            'audience_mode' => $mode,
+        ];
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
+            $kind = $data['kind'] ?: $this->detectMediaKind($ext, (string) $file->getMimeType());
+            if (! $kind) {
+                return redirect()
+                    ->route('admin.dashboard', ['section' => 'media'])
+                    ->withErrors(['file' => 'Unsupported file type.'])
+                    ->withInput($request->except('file'));
+            }
+
+            $filename = (string) Str::uuid().'.'.$ext;
+            $path = $file->storeAs('media', $filename);
+            $oldPath = $mediaAsset->file_path;
+
+            $updates['kind'] = $kind;
+            $updates['original_filename'] = $file->getClientOriginalName();
+            $updates['file_path'] = $path;
+            $updates['mime'] = $file->getMimeType();
+            $updates['byte_size'] = $file->getSize() ?: 0;
+
+            $mediaAsset->update($updates);
+            $this->syncMediaTargets($mediaAsset, $mode, $rawTargets);
+
+            if ($oldPath && $oldPath !== $path) {
+                Storage::disk('local')->delete($oldPath);
+            }
+
+            return $this->dashboardRedirect('media', 'Media updated (file replaced).');
+        }
+
+        if (! empty($data['kind'])) {
+            $updates['kind'] = $data['kind'];
+        }
+
+        $mediaAsset->update($updates);
+        $this->syncMediaTargets($mediaAsset, $mode, $rawTargets);
+
+        return $this->dashboardRedirect('media', 'Media updated.');
     }
 
     public function publishMedia(MediaAsset $mediaAsset, MediaPublishService $publisher)

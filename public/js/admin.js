@@ -376,6 +376,20 @@
       initAudiencePicker(root);
     });
 
+    document.querySelectorAll("[data-toggle-media-edit]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-toggle-media-edit");
+        const row = id ? document.getElementById(id) : null;
+        if (!row) return;
+        const open = row.hasAttribute("hidden");
+        if (open) {
+          row.removeAttribute("hidden");
+        } else {
+          row.setAttribute("hidden", "");
+        }
+      });
+    });
+
     document.querySelectorAll("form[data-media-upload]").forEach((form) => {
       const maxBytes = Number(form.getAttribute("data-max-bytes") || 104857600);
       const fileInput = form.querySelector('input[type="file"][name="file"]');

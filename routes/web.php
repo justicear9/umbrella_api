@@ -30,6 +30,7 @@ Route::middleware(AdminKeyMiddleware::class)->prefix('admin')->group(function ()
     Route::delete('/notices/{notice}', [AdminController::class, 'destroyNotice'])->name('admin.notices.destroy');
 
     Route::post('/media', [AdminController::class, 'storeMedia'])->name('admin.media.store');
+    Route::put('/media/{mediaAsset}', [AdminController::class, 'updateMedia'])->name('admin.media.update');
     Route::post('/media/{mediaAsset}/publish', [AdminController::class, 'publishMedia'])->name('admin.media.publish');
     Route::post('/media/{mediaAsset}/unpublish', [AdminController::class, 'unpublishMedia'])->name('admin.media.unpublish');
     Route::delete('/media/{mediaAsset}', [AdminController::class, 'destroyMedia'])->name('admin.media.destroy');

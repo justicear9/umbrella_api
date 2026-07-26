@@ -1,8 +1,10 @@
 @php
     $prefix = $prefix ?? 'audience';
     $audienceId = $prefix.'-audience';
-    $oldMode = old('audience_mode', 'all');
-    $oldTargets = collect(old('target_ids', []))->values()->all();
+    $defaultMode = $defaultMode ?? 'all';
+    $defaultTargets = $defaultTargets ?? [];
+    $oldMode = old('audience_mode', $defaultMode);
+    $oldTargets = collect(old('target_ids', $defaultTargets))->values()->all();
     $geoCatalog = $regions->map(static function ($region) {
         return [
             'id' => $region->id,

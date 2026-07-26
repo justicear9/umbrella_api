@@ -3,11 +3,13 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BriefingController;
 use App\Http\Controllers\Api\ChatHistoryController;
+use App\Http\Controllers\Api\CommunicatorDirectoryController;
 use App\Http\Controllers\Api\DevicePushTokenController;
 use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\GeographyController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\MediaLibraryController;
+use App\Http\Controllers\Api\NationalChatController;
 use App\Http\Controllers\Api\NoticeController;
 use App\Http\Controllers\Api\PressPrepController;
 use Illuminate\Support\Facades\Route;
@@ -41,6 +43,13 @@ Route::middleware('api.token')->group(function () {
 
     Route::get('/geography', [GeographyController::class, 'index']);
     Route::post('/device/push-token', [DevicePushTokenController::class, 'store']);
+
+    Route::get('/chat/national/messages', [NationalChatController::class, 'messages']);
+    Route::post('/chat/national/messages', [NationalChatController::class, 'store']);
+    Route::get('/chat/mention-suggestions', [NationalChatController::class, 'mentionSuggestions']);
+
+    Route::get('/communicators', [CommunicatorDirectoryController::class, 'index']);
+    Route::get('/communicators/{user}', [CommunicatorDirectoryController::class, 'show']);
 
     Route::get('/notices/unread-count', [NoticeController::class, 'unreadCount']);
     Route::get('/notices', [NoticeController::class, 'index']);
