@@ -150,16 +150,19 @@ class NationalChatService
             $question = 'Give a short on-message briefing tip for NDC communicators.';
         }
 
+        $roomContext = $this->recentRoomTranscript($userMessage, 20);
+        $prompt = $this->buildComradePrompt($author, $question, $roomContext);
+
         try {
-            $result = $this->rag->answer($question, []);
-            $answer = trim((string) ($result['answer'] ?? ''));
+            // RagService returns `response` (same shape as Ask / Briefing).
+            $result = $this->rag->answer($prompt, []);
+            $answer = trim((string) ($result['response'] ?? ''));
             if ($answer === '') {
-                return null;
+                $answer = 'I could not form a reply from the digested sources just now. Try asking again with a bit more detail.';
             }
         } catch (\Throwable $e) {
             Log::warning('National chat @comrade failed', ['error' => $e->getMessage()]);
-
-            return null;
+            $answer = 'I hit a snag pulling sources just now. Please try @comrade again in a moment.';
         }
 
         $ai = RoomMessage::create([
@@ -170,9 +173,9 @@ class NationalChatService
         ]);
         $ai->load(['mentions']);
 
+        // Notify all communicators including the asker (they may be backgrounded while polling stops).
         $recipients = User::query()
             ->where('role', User::ROLE_COMMUNICATOR)
-            ->where('id', '!=', $author->id)
             ->get();
 
         $this->push->sendToUsers($recipients, [
@@ -186,6 +189,67 @@ class NationalChatService
         ]);
 
         return $this->serialize($ai);
+    }
+
+    /**
+     * Recent room lines so Comrade can verify / clarify claims made in the group.
+     *
+     * @return list<string>
+     */
+    private function recentRoomTranscript(RoomMessage $trigger, int $limit = 20): array
+    {
+        $rows = RoomMessage::query()
+            ->with('user')
+            ->where('chat_room_id', $trigger->chat_room_id)
+            ->where('id', '<', $trigger->id)
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->sortBy('id')
+            ->values();
+
+        $lines = [];
+        foreach ($rows as $row) {
+            if ($row->kind === RoomMessage::KIND_AI) {
+                $who = 'Comrade AI';
+            } else {
+                $who = $this->firstName($row->user?->name);
+            }
+            $body = trim((string) $row->body);
+            if ($body === '') {
+                continue;
+            }
+            $lines[] = $who.': '.$body;
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param  list<string>  $roomLines
+     */
+    private function buildComradePrompt(User $author, string $question, array $roomLines): string
+    {
+        $asker = $this->firstName($author->name);
+        $transcript = $roomLines === []
+            ? '(No earlier messages in this room.)'
+            : implode("\n", $roomLines);
+
+        return <<<PROMPT
+You are answering inside the National Chatroom for NDC communicators.
+
+Your job here:
+- Brief, verify, or clarify what communicators are discussing.
+- When they ask you to verify a claim, use the RECENT ROOM DISCUSSION plus SOURCE CONTEXT: say clearly whether it holds, correct it if wrong, and give a short radio/TV-ready clarification.
+- Quote the disputed claim briefly before you rule on it.
+- Stay concise and useful for the whole room — not a private chat.
+
+RECENT ROOM DISCUSSION (oldest → newest):
+{$transcript}
+
+REQUEST FROM {$asker} (after @comrade):
+{$question}
+PROMPT;
     }
 
     /**
