@@ -144,14 +144,51 @@ class PressPrepController extends Controller
     public function debrief(Request $request, PressPrepSession $session, PressPrepService $service)
     {
         $this->authorizeSession($request, $session);
-        set_time_limit(120);
-        $debrief = $session->debrief ?: $service->debrief($session);
+        set_time_limit(180);
+
+        $force = $request->boolean('force');
+        if ($force) {
+            $session->update(['debrief' => null]);
+            $session->refresh();
+        }
+
+        $cached = (! $force && is_array($session->debrief)) ? $session->debrief : null;
+        // Older cached debriefs often lack model answers (live path left them blank).
+        $needsRebuild = $cached === null || $this->debriefMissingModelAnswers($cached);
+        $debrief = $needsRebuild ? $service->debrief($session) : $cached;
 
         return response()->json([
             'success' => true,
             'debrief' => $debrief,
             'session' => $session->fresh('turns'),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $debrief
+     */
+    private function debriefMissingModelAnswers(array $debrief): bool
+    {
+        // Already attempted generation (even if some rows stayed blank).
+        if (! empty($debrief['model_answers_generated'])) {
+            return false;
+        }
+
+        $rows = $debrief['one_pager'] ?? null;
+        if (! is_array($rows) || $rows === []) {
+            return false;
+        }
+
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if (trim((string) ($row['model_answer'] ?? '')) === '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function authorizeSession(Request $request, PressPrepSession $session): void

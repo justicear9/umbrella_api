@@ -231,9 +231,13 @@ PROMPT,
         // Natural finish sets status to completed before debrief; End early leaves it live.
         $endedEarly = in_array($session->status, ['live', 'setup'], true);
 
-        $answered = $session->turns()->whereNotNull('user_answer')->get();
+        $answered = $session->turns()->whereNotNull('user_answer')->orderBy('turn_index')->get();
         $answeredCount = $answered->count();
         $planned = (int) $session->question_count;
+
+        // Model answers are skipped during live Q&A for speed — fill them here.
+        $this->fillMissingModelAnswers($session, $answered);
+        $answered = $session->turns()->whereNotNull('user_answer')->orderBy('turn_index')->get();
 
         $scores = $answeredCount === 0
             ? ['accuracy' => 0, 'message_discipline' => 0, 'composure' => 0]
@@ -300,6 +304,8 @@ PROMPT,
             'best_lines' => $bestLines,
             'summary' => $summary,
             'one_pager' => $onePager,
+            // Stops the API from re-running model generation on every open if some stay blank.
+            'model_answers_generated' => true,
         ];
 
         $session->update([
@@ -308,6 +314,83 @@ PROMPT,
         ]);
 
         return $debrief;
+    }
+
+    /**
+     * Write model answers onto answered turns that still lack them (live path leaves them blank).
+     *
+     * @param  \Illuminate\Support\Collection<int, PressPrepTurn>  $answered
+     */
+    private function fillMissingModelAnswers(PressPrepSession $session, $answered): void
+    {
+        $needs = $answered
+            ->filter(fn (PressPrepTurn $t) => trim((string) ($t->model_answer ?? '')) === '')
+            ->values();
+
+        if ($needs->isEmpty()) {
+            return;
+        }
+
+        $pack = collect($session->briefing_pack ?? [])
+            ->take(5)
+            ->map(fn ($b) => [
+                'category' => $b['category'] ?? '',
+                'title' => $b['title'] ?? '',
+                'summary' => mb_substr((string) ($b['summary'] ?? ''), 0, 280),
+                'talking_points' => array_slice(array_values($b['talking_points'] ?? []), 0, 4),
+            ])
+            ->all();
+
+        $payload = $needs->map(fn (PressPrepTurn $t) => [
+            'turn_id' => $t->id,
+            'question' => $t->question,
+            'user_answer' => $t->user_answer,
+            'coach_note' => $t->coach_note,
+        ])->all();
+
+        $result = $this->openai->chatJson([
+            [
+                'role' => 'system',
+                'content' => <<<'PROMPT'
+You are an NDC press coach writing MODEL answers for a Ghana communicator debrief.
+Return STRICT JSON:
+{
+  "answers": [
+    { "turn_id": 123, "model_answer": "2-4 short spoken sentences they could have used" }
+  ]
+}
+Rules:
+- One entry per turn_id provided.
+- Ground claims in BRIEFINGS only — no invented statistics.
+- Strong message discipline: bridge, land on government action, avoid repeating hostile frames.
+- Ghana media tone: clear, confident, plain English.
+- Do not lecture; write the answer they should have given on air.
+PROMPT
+            ],
+            [
+                'role' => 'user',
+                'content' => json_encode([
+                    'briefings' => $pack,
+                    'turns' => $payload,
+                ], JSON_UNESCAPED_UNICODE),
+            ],
+        ], ['max_tokens' => 2200, 'temperature' => 0.35]);
+
+        $byId = [];
+        foreach ($result['answers'] ?? [] as $row) {
+            $id = (int) ($row['turn_id'] ?? 0);
+            $text = trim((string) ($row['model_answer'] ?? ''));
+            if ($id > 0 && $text !== '') {
+                $byId[$id] = $text;
+            }
+        }
+
+        foreach ($needs as $turn) {
+            $text = $byId[$turn->id] ?? null;
+            if ($text) {
+                $turn->update(['model_answer' => $text]);
+            }
+        }
     }
 
     private function buildBriefingPack(PressPrepSession $session): array
