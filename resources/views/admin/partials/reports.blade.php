@@ -40,7 +40,7 @@
                                 @endif
                                 {{ \Illuminate\Support\Str::limit($report->message?->body ?? '—', 160) }}
                             </td>
-                            <td>{{ $report->reason ?: '—' }}</td>
+                            <td>{{ \App\Models\ContentReport::reasonLabel($report->reason) }}</td>
                             <td>{{ $report->status }}</td>
                             <td>
                                 @if ($report->status === 'open')

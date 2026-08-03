@@ -11,6 +11,26 @@ class ContentReport extends Model
 
     public const STATUS_RESOLVED = 'resolved';
 
+    /** Canonical report categories (stored in `reason`). */
+    public const REASONS = [
+        'sexual_explicit' => 'Sexual / explicit',
+        'harassment_hate' => 'Harassment / hate',
+        'threats_violence' => 'Threats / violence',
+        'spam' => 'Spam',
+        'fraud_scam' => 'Fraud / scam',
+        'misinformation' => 'Misinformation',
+        'other' => 'Other',
+    ];
+
+    public static function reasonLabel(?string $code): string
+    {
+        if ($code === null || $code === '') {
+            return '—';
+        }
+
+        return self::REASONS[$code] ?? $code;
+    }
+
     protected $fillable = [
         'reporter_id',
         'room_message_id',

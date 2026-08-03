@@ -8,6 +8,7 @@ use App\Models\RoomMessage;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class ContentReportController extends Controller
 {
@@ -32,10 +33,10 @@ class ContentReportController extends Controller
         }
 
         $data = $request->validate([
-            'reason' => ['nullable', 'string', 'max:500'],
+            'reason' => ['required', 'string', Rule::in(array_keys(ContentReport::REASONS))],
         ]);
 
-        $report = ContentReport::query()->firstOrCreate(
+        $report = ContentReport::query()->updateOrCreate(
             [
                 'reporter_id' => $user->id,
                 'room_message_id' => $message->id,
@@ -43,7 +44,7 @@ class ContentReportController extends Controller
             ],
             [
                 'reported_user_id' => $message->user_id,
-                'reason' => $data['reason'] ?? null,
+                'reason' => $data['reason'],
             ]
         );
 
@@ -52,13 +53,15 @@ class ContentReportController extends Controller
             'reporter_id' => $user->id,
             'message_id' => $message->id,
             'reported_user_id' => $message->user_id,
-            'reason' => $data['reason'] ?? null,
+            'reason' => $data['reason'],
+            'reason_label' => ContentReport::reasonLabel($data['reason']),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Report submitted. Moderators will review within 24 hours.',
             'report_id' => $report->id,
+            'reason' => $data['reason'],
         ]);
     }
 }
