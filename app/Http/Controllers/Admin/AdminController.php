@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\PressPrepAssignedMail;
 use App\Models\Briefing;
 use App\Models\Constituency;
+use App\Models\ContentReport;
 use App\Models\Document;
 use App\Models\MediaAsset;
 use App\Models\MediaTarget;
@@ -13,6 +14,7 @@ use App\Models\Notice;
 use App\Models\NoticeTarget;
 use App\Models\PressPrepSession;
 use App\Models\Region;
+use App\Models\RoomMessage;
 use App\Models\User;
 use App\Services\DocumentIngestService;
 use App\Services\GeminiTtsService;
@@ -73,6 +75,15 @@ class AdminController extends Controller
         $regions = Region::query()->with(['constituencies' => fn ($q) => $q->orderBy('name')])->orderBy('name')->get();
         $notices = Notice::query()->latest()->limit(50)->get();
         $mediaAssets = MediaAsset::query()->with('targets')->latest()->limit(50)->get();
+        $contentReports = ContentReport::query()
+            ->with([
+                'reporter:id,name,party_id',
+                'reportedUser:id,name,party_id,suspended_at',
+                'message' => fn ($q) => $q->withTrashed(),
+            ])
+            ->latest()
+            ->limit(100)
+            ->get();
         $geminiConfigured = $tts->isConfigured();
 
         return view('admin.dashboard', [
@@ -87,6 +98,7 @@ class AdminController extends Controller
             'regions' => $regions,
             'notices' => $notices,
             'mediaAssets' => $mediaAssets,
+            'contentReports' => $contentReports,
             'geminiConfigured' => $geminiConfigured,
             'geminiKeyMasked' => $this->maskSecret($env['GEMINI_API_KEY'] ?? ''),
             'geminiModel' => $env['GEMINI_TTS_MODEL'] ?? config('services.gemini.tts_model'),
@@ -96,6 +108,7 @@ class AdminController extends Controller
                 'documents_total' => $documents->count(),
                 'briefings' => $briefings->count(),
                 'gemini' => $geminiConfigured,
+                'open_reports' => $contentReports->where('status', ContentReport::STATUS_OPEN)->count(),
             ],
         ]);
     }
@@ -177,6 +190,53 @@ class AdminController extends Controller
         ]);
 
         return $this->dashboardRedirect('communicators', 'Admin account created for '.$data['email']);
+    }
+
+    public function resolveContentReport(Request $request, ContentReport $report)
+    {
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['remove', 'remove_and_suspend', 'dismiss'])],
+        ]);
+
+        $admin = $request->user();
+        $message = RoomMessage::withTrashed()->find($report->room_message_id);
+
+        if ($data['action'] === 'dismiss') {
+            $report->forceFill([
+                'status' => ContentReport::STATUS_RESOLVED,
+                'resolved_at' => now(),
+                'resolved_by' => $admin?->id,
+            ])->save();
+
+            return $this->dashboardRedirect('reports', 'Report dismissed.');
+        }
+
+        if ($message && ! $message->trashed()) {
+            $message->delete();
+        }
+
+        if ($data['action'] === 'remove_and_suspend' && $report->reported_user_id) {
+            $offender = User::query()->find($report->reported_user_id);
+            if ($offender && $offender->isCommunicator()) {
+                $offender->forceFill(['suspended_at' => now()])->save();
+                $offender->clearApiToken();
+            }
+        }
+
+        ContentReport::query()
+            ->where('room_message_id', $report->room_message_id)
+            ->where('status', ContentReport::STATUS_OPEN)
+            ->update([
+                'status' => ContentReport::STATUS_RESOLVED,
+                'resolved_at' => now(),
+                'resolved_by' => $admin?->id,
+            ]);
+
+        $msg = $data['action'] === 'remove_and_suspend'
+            ? 'Message removed and communicator suspended.'
+            : 'Message removed from National Chat.';
+
+        return $this->dashboardRedirect('reports', $msg);
     }
 
     public function assignPressPrep(Request $request)

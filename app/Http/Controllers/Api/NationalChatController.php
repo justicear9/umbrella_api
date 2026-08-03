@@ -22,7 +22,7 @@ class NationalChatController extends Controller
 
         return response()->json([
             'success' => true,
-            'messages' => $chat->messagesAfter($afterId > 0 ? $afterId : null, $limit),
+            'messages' => $chat->messagesAfter($user, $afterId > 0 ? $afterId : null, $limit),
         ]);
     }
 
@@ -31,6 +31,21 @@ class NationalChatController extends Controller
         $user = $request->user();
         if (! $user || ! $user->isCommunicator()) {
             return response()->json(['success' => false, 'message' => 'Forbidden'], 403);
+        }
+
+        if (! $user->hasAcceptedTerms()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please accept the Terms of Use before posting in National Chat.',
+                'code' => 'terms_required',
+            ], 403);
+        }
+
+        if ($user->isSuspended()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This account has been suspended for Terms of Use violations.',
+            ], 403);
         }
 
         $key = 'national-chat:'.$user->id;
@@ -48,7 +63,11 @@ class NationalChatController extends Controller
             return response()->json(['success' => false, 'message' => 'Message cannot be empty.'], 422);
         }
 
-        $result = $chat->post($user, $body);
+        try {
+            $result = $chat->post($user, $body);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'success' => true,

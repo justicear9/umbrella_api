@@ -31,6 +31,8 @@ class User extends Authenticatable
         'region_id',
         'constituency_id',
         'api_token',
+        'terms_accepted_at',
+        'suspended_at',
     ];
 
     protected $hidden = [
@@ -45,7 +47,19 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'date_of_birth' => 'date',
             'password' => 'hashed',
+            'terms_accepted_at' => 'datetime',
+            'suspended_at' => 'datetime',
         ];
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->suspended_at !== null;
+    }
+
+    public function hasAcceptedTerms(): bool
+    {
+        return $this->terms_accepted_at !== null;
     }
 
     public function isAdmin(): bool
@@ -106,6 +120,21 @@ class User extends Authenticatable
         return $this->hasMany(DevicePushToken::class);
     }
 
+    public function blocks(): HasMany
+    {
+        return $this->hasMany(UserBlock::class, 'blocker_id');
+    }
+
+    /** @return list<int> */
+    public function blockedUserIds(): array
+    {
+        return UserBlock::query()
+            ->where('blocker_id', $this->id)
+            ->pluck('blocked_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     public function toPublicArray(): array
     {
         $this->loadMissing(['region:id,name', 'constituencyRef:id,name,region_id']);
@@ -124,6 +153,8 @@ class User extends Authenticatable
             'constituency_id' => $this->constituency_id,
             'region_name' => $this->region?->name,
             'constituency_name' => $this->constituencyRef?->name ?? $this->constituency,
+            'terms_accepted' => $this->hasAcceptedTerms(),
+            'terms_accepted_at' => $this->terms_accepted_at?->toIso8601String(),
         ];
     }
 

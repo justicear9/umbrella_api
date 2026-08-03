@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BriefingController;
 use App\Http\Controllers\Api\ChatHistoryController;
 use App\Http\Controllers\Api\CommunicatorDirectoryController;
+use App\Http\Controllers\Api\ContentReportController;
 use App\Http\Controllers\Api\DevicePushTokenController;
 use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\GeographyController;
@@ -12,6 +13,8 @@ use App\Http\Controllers\Api\MediaLibraryController;
 use App\Http\Controllers\Api\NationalChatController;
 use App\Http\Controllers\Api\NoticeController;
 use App\Http\Controllers\Api\PressPrepController;
+use App\Http\Controllers\Api\TermsController;
+use App\Http\Controllers\Api\UserBlockController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/categories', [BriefingController::class, 'categories']);
@@ -46,7 +49,15 @@ Route::middleware('api.token')->group(function () {
 
     Route::get('/chat/national/messages', [NationalChatController::class, 'messages']);
     Route::post('/chat/national/messages', [NationalChatController::class, 'store']);
+    Route::post('/chat/national/messages/{message}/report', [ContentReportController::class, 'store']);
     Route::get('/chat/mention-suggestions', [NationalChatController::class, 'mentionSuggestions']);
+
+    Route::get('/terms/status', [TermsController::class, 'status']);
+    Route::post('/terms/accept', [TermsController::class, 'accept']);
+
+    Route::get('/users/blocked', [UserBlockController::class, 'index']);
+    Route::post('/users/{user}/block', [UserBlockController::class, 'store']);
+    Route::delete('/users/{user}/block', [UserBlockController::class, 'destroy']);
 
     Route::get('/communicators', [CommunicatorDirectoryController::class, 'index']);
     Route::get('/communicators/{user}', [CommunicatorDirectoryController::class, 'show']);

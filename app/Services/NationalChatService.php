@@ -26,31 +26,40 @@ class NationalChatService
     /**
      * @return list<array<string, mixed>>
      */
-    public function messagesAfter(?int $afterId = null, int $limit = 50): array
+    public function messagesAfter(?User $viewer = null, ?int $afterId = null, int $limit = 50): array
     {
         $room = $this->room();
-        $query = RoomMessage::query()
+        $blockedIds = $viewer ? $viewer->blockedUserIds() : [];
+
+        $base = fn () => RoomMessage::query()
             ->with(['user.region', 'user.constituencyRef', 'mentions'])
             ->where('chat_room_id', $room->id)
-            ->orderBy('id');
+            ->when($blockedIds !== [], function ($q) use ($blockedIds) {
+                $q->where(function ($inner) use ($blockedIds) {
+                    $inner->whereNull('user_id')
+                        ->orWhereNotIn('user_id', $blockedIds);
+                });
+            });
 
         if ($afterId !== null && $afterId > 0) {
-            $query->where('id', '>', $afterId);
-        } else {
-            // Latest page: fetch newest then reverse for chronological UI.
-            $rows = RoomMessage::query()
-                ->with(['user.region', 'user.constituencyRef', 'mentions'])
-                ->where('chat_room_id', $room->id)
-                ->orderByDesc('id')
+            return $base()
+                ->where('id', '>', $afterId)
+                ->orderBy('id')
                 ->limit($limit)
                 ->get()
-                ->sortBy('id')
-                ->values();
-
-            return $rows->map(fn (RoomMessage $m) => $this->serialize($m))->all();
+                ->map(fn (RoomMessage $m) => $this->serialize($m))
+                ->all();
         }
 
-        return $query->limit($limit)->get()->map(fn (RoomMessage $m) => $this->serialize($m))->all();
+        // Latest page: fetch newest then reverse for chronological UI.
+        $rows = $base()
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->sortBy('id')
+            ->values();
+
+        return $rows->map(fn (RoomMessage $m) => $this->serialize($m))->all();
     }
 
     /**
@@ -59,6 +68,10 @@ class NationalChatService
     public function post(User $author, string $body): array
     {
         $body = trim($body);
+        if ($this->looksLikeSpam($body)) {
+            throw new \InvalidArgumentException('Message rejected by content filter. Please revise and try again.');
+        }
+
         $room = $this->room();
         $parsed = $this->mentions->parse($body);
 
@@ -378,6 +391,23 @@ PROMPT;
                 'constituency_id' => $m->constituency_id,
             ])->values()->all(),
         ];
+    }
+
+    private function looksLikeSpam(string $body): bool
+    {
+        if (mb_strlen($body) > 4000) {
+            return true;
+        }
+        // Repeated character floods / obvious spam patterns.
+        if (preg_match('/(.)\1{40,}/u', $body)) {
+            return true;
+        }
+        $urls = preg_match_all('/https?:\/\/\S+/i', $body) ?: 0;
+        if ($urls >= 5) {
+            return true;
+        }
+
+        return false;
     }
 
     private function firstName(?string $name): string

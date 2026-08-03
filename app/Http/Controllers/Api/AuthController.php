@@ -28,6 +28,12 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->isSuspended()) {
+            throw ValidationException::withMessages([
+                'party_id' => ['This account has been suspended for Terms of Use violations.'],
+            ]);
+        }
+
         $token = $user->issueApiToken();
 
         return response()->json([
@@ -41,6 +47,15 @@ class AuthController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+
+        if ($user->isSuspended()) {
+            $user->clearApiToken();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'This account has been suspended for Terms of Use violations.',
+            ], 403);
+        }
 
         return response()->json([
             'success' => true,

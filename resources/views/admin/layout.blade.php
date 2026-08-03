@@ -33,6 +33,7 @@
             <button type="button" class="nav-item" data-section="communicators">Communicators</button>
             <button type="button" class="nav-item" data-section="press-prep">Press Prep</button>
             <button type="button" class="nav-item" data-section="notices">Notices</button>
+            <button type="button" class="nav-item" data-section="reports">Reports</button>
             <button type="button" class="nav-item" data-section="media">Media</button>
             <button type="button" class="nav-item" data-section="documents">Documents</button>
             <button type="button" class="nav-item" data-section="settings">Settings</button>

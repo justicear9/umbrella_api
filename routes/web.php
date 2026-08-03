@@ -1,8 +1,13 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\LegalController;
 use App\Http\Middleware\AdminKeyMiddleware;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/support', [LegalController::class, 'support'])->name('legal.support');
+Route::get('/terms', [LegalController::class, 'terms'])->name('legal.terms');
+Route::get('/privacy', [LegalController::class, 'privacy'])->name('legal.privacy');
 
 Route::get('/', fn () => redirect()->route('admin.dashboard'));
 
@@ -28,6 +33,8 @@ Route::middleware(AdminKeyMiddleware::class)->prefix('admin')->group(function ()
     Route::post('/notices/{notice}/publish', [AdminController::class, 'publishNotice'])->name('admin.notices.publish');
     Route::post('/notices/{notice}/unpublish', [AdminController::class, 'unpublishNotice'])->name('admin.notices.unpublish');
     Route::delete('/notices/{notice}', [AdminController::class, 'destroyNotice'])->name('admin.notices.destroy');
+
+    Route::post('/reports/{report}/resolve', [AdminController::class, 'resolveContentReport'])->name('admin.reports.resolve');
 
     Route::post('/media', [AdminController::class, 'storeMedia'])->name('admin.media.store');
     Route::put('/media/{mediaAsset}', [AdminController::class, 'updateMedia'])->name('admin.media.update');
