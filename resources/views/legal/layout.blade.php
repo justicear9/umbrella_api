@@ -13,7 +13,7 @@
             color: #1a2e24;
             line-height: 1.55;
         }
-        .wrap { max-width: 720px; margin: 0 auto; padding: 40px 20px 64px; }
+        .wrap { max-width: 720px; margin: 0 auto; padding: {{ !empty($embed) ? '20px 16px 40px' : '40px 20px 64px' }}; }
         h1 { font-size: 1.75rem; margin: 0 0 8px; color: #016438; }
         h2 { font-size: 1.15rem; margin: 28px 0 8px; color: #016438; }
         .lede { color: #4a6356; margin: 0 0 24px; }
@@ -33,11 +33,13 @@
 </head>
 <body>
 <div class="wrap">
+    @unless(!empty($embed))
     <nav>
         <a href="{{ url('/support') }}">Support</a>
         <a href="{{ url('/terms') }}">Terms</a>
         <a href="{{ url('/privacy') }}">Privacy</a>
     </nav>
+    @endunless
     @yield('content')
     <footer>
         Comrade AI is a private communication-coaching app for authorised political party communicators.

@@ -35,10 +35,12 @@
             <a href="mailto:support@fumbo.ai">support@fumbo.ai</a> with details. Moderators act on reports within 24 hours.
         </p>
 
+        @unless(!empty($embed))
         <h2>Legal</h2>
         <p>
             <a href="{{ url('/terms') }}">Terms of Use</a> ·
             <a href="{{ url('/privacy') }}">Privacy Policy</a>
         </p>
+        @endunless
     </div>
 @endsection
