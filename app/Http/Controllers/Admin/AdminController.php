@@ -174,6 +174,20 @@ class AdminController extends Controller
         );
     }
 
+    public function resetCommunicatorTerms(User $user)
+    {
+        if (! $user->isCommunicator()) {
+            return $this->dashboardRedirect('communicators', 'Not a communicator account.');
+        }
+
+        $user->forceFill(['terms_accepted_at' => null])->save();
+
+        return $this->dashboardRedirect(
+            'communicators',
+            'Terms reset for '.$user->party_id.'. They must accept again on next app open.'
+        );
+    }
+
     public function storeAdmin(Request $request)
     {
         $data = $request->validate([

@@ -23,6 +23,7 @@ Route::middleware(AdminKeyMiddleware::class)->prefix('admin')->group(function ()
     Route::delete('/documents/{document}', [AdminController::class, 'destroyDocument'])->name('admin.documents.destroy');
     Route::put('/briefings/{briefing}', [AdminController::class, 'updateBriefing'])->name('admin.briefings.update');
     Route::post('/communicators', [AdminController::class, 'storeCommunicator'])->name('admin.communicators.store');
+    Route::post('/communicators/{user}/reset-terms', [AdminController::class, 'resetCommunicatorTerms'])->name('admin.communicators.reset-terms');
     Route::post('/admins', [AdminController::class, 'storeAdmin'])->name('admin.admins.store');
     Route::post('/press-prep/assign', [AdminController::class, 'assignPressPrep'])->name('admin.press-prep.assign');
     Route::get('/press-prep/{session}', [AdminController::class, 'pressPrepTranscript'])->name('admin.press-prep.show');

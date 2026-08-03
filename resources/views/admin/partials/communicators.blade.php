@@ -67,7 +67,7 @@
                 <div class="table-wrap" style="margin-top:1.25rem">
                     <table>
                         <thead>
-                        <tr><th>Name</th><th>Party ID</th><th>Level</th><th>Region / Constituency</th><th>Occupation</th></tr>
+                        <tr><th>Name</th><th>Party ID</th><th>Level</th><th>Region / Constituency</th><th>Occupation</th><th>Terms</th><th></th></tr>
                         </thead>
                         <tbody>
                         @foreach ($communicators as $c)
@@ -77,6 +77,20 @@
                                 <td>{{ $c->comms_level ?: '—' }}</td>
                                 <td>{{ $c->region?->name ?: '—' }} / {{ $c->constituencyRef?->name ?: ($c->constituency ?: '—') }}</td>
                                 <td>{{ $c->occupation }}</td>
+                                <td>
+                                    @if ($c->terms_accepted_at)
+                                        <span class="muted">Accepted</span>
+                                    @else
+                                        <span class="muted">Not accepted</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <form method="POST" action="{{ route('admin.communicators.reset-terms', $c) }}" style="display:inline;"
+                                          onsubmit="return confirm('Require {{ $c->party_id }} to accept Terms again?');">
+                                        @csrf
+                                        <button type="submit" class="btn-muted">Reset terms</button>
+                                    </form>
+                                </td>
                             </tr>
                         @endforeach
                         </tbody>
