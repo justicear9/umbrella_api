@@ -3,9 +3,14 @@
         <div class="card">
             <h2>National Chat reports</h2>
             <p class="card-lede">
-                Act on objectionable content within 24 hours: remove the message and, when needed, suspend the communicator.
+                Review flagged messages within 24 hours.
                 Open reports: <strong>{{ $contentReports->where('status', 'open')->count() }}</strong>
             </p>
+            <ul class="muted" style="margin:0 0 1rem 1.1rem;line-height:1.5;">
+                <li><strong>Remove message</strong> — deletes the chat message for everyone; closes related open reports.</li>
+                <li><strong>Remove &amp; suspend author</strong> — same as above, and blocks that communicator from signing in.</li>
+                <li><strong>Keep message / close report</strong> — leaves the message visible; marks this report resolved (false alarm).</li>
+            </ul>
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -42,20 +47,24 @@
                             </td>
                             <td>{{ \App\Models\ContentReport::reasonLabel($report->reason) }}</td>
                             <td>{{ $report->status }}</td>
-                            <td>
+                            <td style="white-space:normal;min-width:11rem;">
                                 @if ($report->status === 'open')
-                                    <form method="POST" action="{{ route('admin.reports.resolve', $report) }}" style="display:inline;">
+                                    <form method="POST" action="{{ route('admin.reports.resolve', $report) }}" style="display:inline-block;margin:2px 0;">
                                         @csrf
-                                        <button type="submit" name="action" value="remove">Remove</button>
+                                        <input type="hidden" name="decision" value="remove">
+                                        <button type="submit" title="Delete this message from National Chat for all users">Remove message</button>
                                     </form>
-                                    <form method="POST" action="{{ route('admin.reports.resolve', $report) }}" style="display:inline;"
-                                          onsubmit="return confirm('Remove message and suspend this communicator?');">
+                                    <form method="POST" action="{{ route('admin.reports.resolve', $report) }}" style="display:inline-block;margin:2px 0;"
+                                          onsubmit="return confirm('Delete the message for everyone AND suspend the author so they cannot sign in?');">
                                         @csrf
-                                        <button type="submit" name="action" value="remove_and_suspend">Remove + suspend</button>
+                                        <input type="hidden" name="decision" value="remove_and_suspend">
+                                        <button type="submit" title="Delete message and suspend the author">Remove &amp; suspend author</button>
                                     </form>
-                                    <form method="POST" action="{{ route('admin.reports.resolve', $report) }}" style="display:inline;">
+                                    <form method="POST" action="{{ route('admin.reports.resolve', $report) }}" style="display:inline-block;margin:2px 0;"
+                                          onsubmit="return confirm('Close this report and keep the message visible in chat?');">
                                         @csrf
-                                        <button type="submit" name="action" value="dismiss" class="btn-muted">Dismiss</button>
+                                        <input type="hidden" name="decision" value="dismiss">
+                                        <button type="submit" class="btn-muted" title="False alarm — keep the message, close the report">Keep message / close report</button>
                                     </form>
                                 @else
                                     <span class="muted">Resolved {{ $report->resolved_at?->format('Y-m-d H:i') }}</span>

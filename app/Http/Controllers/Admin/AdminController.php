@@ -209,27 +209,28 @@ class AdminController extends Controller
     public function resolveContentReport(Request $request, ContentReport $report)
     {
         $data = $request->validate([
-            'action' => ['required', Rule::in(['remove', 'remove_and_suspend', 'dismiss'])],
+            'decision' => ['required', Rule::in(['remove', 'remove_and_suspend', 'dismiss'])],
         ]);
 
         $admin = $request->user();
         $message = RoomMessage::withTrashed()->find($report->room_message_id);
+        $decision = $data['decision'];
 
-        if ($data['action'] === 'dismiss') {
+        if ($decision === 'dismiss') {
             $report->forceFill([
                 'status' => ContentReport::STATUS_RESOLVED,
                 'resolved_at' => now(),
                 'resolved_by' => $admin?->id,
             ])->save();
 
-            return $this->dashboardRedirect('reports', 'Report dismissed.');
+            return $this->dashboardRedirect('reports', 'Report closed — message left in chat.');
         }
 
         if ($message && ! $message->trashed()) {
             $message->delete();
         }
 
-        if ($data['action'] === 'remove_and_suspend' && $report->reported_user_id) {
+        if ($decision === 'remove_and_suspend' && $report->reported_user_id) {
             $offender = User::query()->find($report->reported_user_id);
             if ($offender && $offender->isCommunicator()) {
                 $offender->forceFill(['suspended_at' => now()])->save();
@@ -246,9 +247,9 @@ class AdminController extends Controller
                 'resolved_by' => $admin?->id,
             ]);
 
-        $msg = $data['action'] === 'remove_and_suspend'
-            ? 'Message removed and communicator suspended.'
-            : 'Message removed from National Chat.';
+        $msg = $decision === 'remove_and_suspend'
+            ? 'Message removed from National Chat and author suspended.'
+            : 'Message removed from National Chat for everyone.';
 
         return $this->dashboardRedirect('reports', $msg);
     }
